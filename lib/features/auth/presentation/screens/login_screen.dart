@@ -13,30 +13,72 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
+  final _loginFormKey = GlobalKey<FormState>();
+  final _registerFormKey = GlobalKey<FormState>();
+  final _loginEmailCtrl = TextEditingController();
+  final _loginPasswordCtrl = TextEditingController();
+  final _registerNameCtrl = TextEditingController();
+  final _registerEmailCtrl = TextEditingController();
+  final _registerPasswordCtrl = TextEditingController();
   bool _loading = false;
+  bool _isRegisterMode = false;
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
+    _loginEmailCtrl.dispose();
+    _loginPasswordCtrl.dispose();
+    _registerNameCtrl.dispose();
+    _registerEmailCtrl.dispose();
+    _registerPasswordCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _submitLogin() async {
+    if (!_loginFormKey.currentState!.validate()) {
+      return;
+    }
 
+    await _authenticate(
+      endpoint: '/auth/login',
+      payload: {
+        'email': _loginEmailCtrl.text.trim(),
+        'password': _loginPasswordCtrl.text,
+      },
+      genericError: 'Login failed. Please try again.',
+      unauthorizedError: 'Invalid email or password.',
+    );
+  }
+
+  Future<void> _submitRegistration() async {
+    if (!_registerFormKey.currentState!.validate()) {
+      return;
+    }
+
+    await _authenticate(
+      endpoint: '/auth/register',
+      payload: {
+        'name': _registerNameCtrl.text.trim(),
+        'email': _registerEmailCtrl.text.trim(),
+        'password': _registerPasswordCtrl.text,
+      },
+      genericError: 'Registration failed. Please try again.',
+      conflictError: 'That email is already registered.',
+    );
+  }
+
+  Future<void> _authenticate({
+    required String endpoint,
+    required Map<String, dynamic> payload,
+    required String genericError,
+    String? unauthorizedError,
+    String? conflictError,
+  }) async {
     setState(() => _loading = true);
     try {
       final dio = ref.read(dioProvider);
       final tokenStorage = ref.read(tokenStorageProvider);
 
-      final response = await dio.post('/auth/login', data: {
-        'email': _emailCtrl.text.trim(),
-        'password': _passwordCtrl.text,
-      });
+      final response = await dio.post(endpoint, data: payload);
 
       final access = response.data['accessToken'] as String?;
       final refresh = response.data['refreshToken'] as String?;
@@ -45,30 +87,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (access == null || refresh == null) {
         throw DioException(
           requestOptions: response.requestOptions,
-          message: 'Missing token fields in login response',
+          message: 'Missing token fields in auth response',
         );
       }
 
       await tokenStorage.writeTokens(
-          accessToken: access, refreshToken: refresh);
+        accessToken: access,
+        refreshToken: refresh,
+      );
       await tokenStorage.writeUserProfile(
         email: user?['email'] as String?,
         name: user?['name'] as String?,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       Navigator.of(context)
           .pushNamedAndRemoveUntil(AppRoutes.dashboard, (_) => false);
     } on DioException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       final status = e.response?.statusCode;
-      final message = status == 401
-          ? 'Invalid email or password.'
-          : 'Login failed. Please try again.';
+      final serverMessage = e.response?.data is Map<String, dynamic>
+          ? e.response?.data['message'] as String?
+          : null;
+
+      final message = switch (status) {
+        401 => unauthorizedError ?? genericError,
+        409 => conflictError ?? serverMessage ?? genericError,
+        400 => serverMessage ?? genericError,
+        _ => genericError,
+      };
+
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -128,7 +188,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'A cleaner way to review spending, follow trends, and stay in control on mobile.',
+                            'Track personal and shared spending with a simple mobile workflow.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -143,80 +203,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: context.appCardDecoration(),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Login',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _AuthModeButton(
+                                  label: 'Login',
+                                  selected: !_isRegisterMode,
+                                  onTap: () {
+                                    if (_isRegisterMode) {
+                                      setState(() => _isRegisterMode = false);
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _AuthModeButton(
+                                  label: 'Register',
+                                  selected: _isRegisterMode,
+                                  onTap: () {
+                                    if (!_isRegisterMode) {
+                                      setState(() => _isRegisterMode = true);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            child: _isRegisterMode
+                                ? _RegisterForm(
+                                    key: const ValueKey('register'),
+                                    formKey: _registerFormKey,
+                                    nameCtrl: _registerNameCtrl,
+                                    emailCtrl: _registerEmailCtrl,
+                                    passwordCtrl: _registerPasswordCtrl,
+                                    loading: _loading,
+                                    onSubmit: _submitRegistration,
+                                  )
+                                : _LoginForm(
+                                    key: const ValueKey('login'),
+                                    formKey: _loginFormKey,
+                                    emailCtrl: _loginEmailCtrl,
+                                    passwordCtrl: _loginPasswordCtrl,
+                                    loading: _loading,
+                                    onSubmit: _submitLogin,
                                   ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Welcome back. Sign in to manage your spending.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            const SizedBox(height: 18),
-                            TextFormField(
-                              controller: _emailCtrl,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: const InputDecoration(
-                                labelText: 'Email *',
-                                hintText: 'you@example.com',
-                                prefixIcon: Icon(Icons.email_outlined),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Email is required';
-                                }
-                                if (!v.contains('@')) {
-                                  return 'Enter a valid email';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _passwordCtrl,
-                              obscureText: true,
-                              decoration: const InputDecoration(
-                                labelText: 'Password *',
-                                hintText: 'Enter your password',
-                                prefixIcon: Icon(Icons.lock_outline_rounded),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) {
-                                  return 'Password is required';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: _loading ? null : _submit,
-                                child: _loading
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Text('Sign in'),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -228,4 +268,246 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+}
+
+class _AuthModeButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AuthModeButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? palette.surfaceMuted : palette.surfaceSoft,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? palette.primary.withValues(alpha: 0.18)
+                : palette.border,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: selected ? palette.textPrimary : palette.textSecondary,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginForm extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController emailCtrl;
+  final TextEditingController passwordCtrl;
+  final bool loading;
+  final Future<void> Function() onSubmit;
+
+  const _LoginForm({
+    super.key,
+    required this.formKey,
+    required this.emailCtrl,
+    required this.passwordCtrl,
+    required this.loading,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Login',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Welcome back. Sign in to manage your spending.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+          TextFormField(
+            controller: emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Email *',
+              hintText: 'you@example.com',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+            validator: _emailValidator,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: passwordCtrl,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Password *',
+              hintText: 'Enter your password',
+              prefixIcon: Icon(Icons.lock_outline_rounded),
+            ),
+            validator: _passwordValidator,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: loading ? null : onSubmit,
+              child: loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Sign in'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RegisterForm extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController nameCtrl;
+  final TextEditingController emailCtrl;
+  final TextEditingController passwordCtrl;
+  final bool loading;
+  final Future<void> Function() onSubmit;
+
+  const _RegisterForm({
+    super.key,
+    required this.formKey,
+    required this.nameCtrl,
+    required this.emailCtrl,
+    required this.passwordCtrl,
+    required this.loading,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Register',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Create your own account and start tracking expenses right away.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+          TextFormField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Name',
+              hintText: 'Mg Mg',
+              prefixIcon: Icon(Icons.person_outline_rounded),
+            ),
+            validator: (value) {
+              final trimmed = value?.trim() ?? '';
+              if (trimmed.isEmpty) {
+                return 'Name is required';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Email *',
+              hintText: 'you@example.com',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+            validator: _emailValidator,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: passwordCtrl,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Password *',
+              hintText: 'At least 8 characters',
+              prefixIcon: Icon(Icons.lock_outline_rounded),
+            ),
+            validator: _passwordValidator,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: loading ? null : onSubmit,
+              child: loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Create account'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String? _emailValidator(String? value) {
+  final trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    return 'Email is required';
+  }
+  if (!trimmed.contains('@')) {
+    return 'Enter a valid email';
+  }
+  return null;
+}
+
+String? _passwordValidator(String? value) {
+  if (value == null || value.isEmpty) {
+    return 'Password is required';
+  }
+  if (value.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+  return null;
 }

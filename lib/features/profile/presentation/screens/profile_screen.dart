@@ -413,92 +413,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _showCreateGroupDialog(
       BuildContext context, WidgetRef ref, AppPalette palette) async {
-    final nameController = TextEditingController();
-    final membersController = TextEditingController();
+    final result = await showDialog<_ProfileCreateGroupDialogResult>(
+      context: context,
+      builder: (_) => const _ProfileCreateGroupDialog(),
+    );
 
-    try {
-      final shouldCreate = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Create group'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Group name',
-                  hintText: 'Trip, Home, Team budget...',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: membersController,
-                decoration: const InputDecoration(
-                  labelText: 'Invite members (optional)',
-                  hintText: 'ayeaye@gmail.com, mgmg@gmail.com',
-                ),
-                maxLines: 2,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldCreate != true) {
-        return;
-      }
-
-      if (!context.mounted) {
-        return;
-      }
-
-      final name = nameController.text.trim();
-      if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a group name.')),
-        );
-        return;
-      }
-
-      final memberEmails = membersController.text
-          .split(',')
-          .map((email) => email.trim())
-          .where((email) => email.isNotEmpty)
-          .toSet()
-          .toList();
-
-      await ref.read(groupRepositoryProvider).createGroup(
-            name,
-            memberEmails: memberEmails,
-          );
-      ref.invalidate(groupsProvider);
-
-      if (!context.mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: palette.textPrimary,
-          content: Text('Group "$name" created.'),
-        ),
-      );
-    } finally {
-      nameController.dispose();
-      membersController.dispose();
+    if (result == null) {
+      return;
     }
+
+    await ref.read(groupRepositoryProvider).createGroup(
+          result.name,
+          memberEmails: result.memberEmails,
+        );
+    ref.invalidate(groupsProvider);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: palette.textPrimary,
+        content: Text('Group "${result.name}" created.'),
+      ),
+    );
   }
 
   Future<void> _openGroupDetail(
@@ -507,6 +446,104 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       MaterialPageRoute(
         builder: (_) => GroupDetailScreen(group: group),
       ),
+    );
+  }
+}
+
+class _ProfileCreateGroupDialogResult {
+  final String name;
+  final List<String> memberEmails;
+
+  const _ProfileCreateGroupDialogResult({
+    required this.name,
+    required this.memberEmails,
+  });
+}
+
+class _ProfileCreateGroupDialog extends StatefulWidget {
+  const _ProfileCreateGroupDialog();
+
+  @override
+  State<_ProfileCreateGroupDialog> createState() =>
+      _ProfileCreateGroupDialogState();
+}
+
+class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _membersController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _membersController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _membersController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create group'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Group name',
+              hintText: 'Trip, Home, Team budget...',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _membersController,
+            decoration: const InputDecoration(
+              labelText: 'Invite members (optional)',
+              hintText: 'ayeaye@gmail.com, mgmg@gmail.com',
+            ),
+            maxLines: 2,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _nameController.text.trim();
+            if (name.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please enter a group name.')),
+              );
+              return;
+            }
+
+            final memberEmails = _membersController.text
+                .split(',')
+                .map((email) => email.trim())
+                .where((email) => email.isNotEmpty)
+                .toSet()
+                .toList();
+
+            Navigator.of(context).pop(
+              _ProfileCreateGroupDialogResult(
+                name: name,
+                memberEmails: memberEmails,
+              ),
+            );
+          },
+          child: const Text('Create'),
+        ),
+      ],
     );
   }
 }

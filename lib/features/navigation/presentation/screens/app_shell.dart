@@ -63,6 +63,32 @@ class _AppShellState extends ConsumerState<AppShell> {
         .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
+  Future<void> _confirmAndSignOut() async {
+    final shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text(
+          'You will need to sign in again to access your expenses and groups on this device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSignOut == true) {
+      await _signOut();
+    }
+  }
+
   Future<void> _openCreateExpense() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const AddExpenseScreen()),
@@ -81,13 +107,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     final pages = <Widget>[
       DashboardScreen(
         onOpenProfile: () => _setIndex(3),
-        onSignOut: _signOut,
+        onSignOut: _confirmAndSignOut,
       ),
       const GroupsScreen(),
       const HistoryScreen(),
       ProfileScreen(
         loadUser: _loadUser,
-        onSignOut: _signOut,
+        onSignOut: _confirmAndSignOut,
       ),
     ];
 
@@ -195,55 +221,52 @@ class _NavItem extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        padding: EdgeInsets.symmetric(
-          horizontal: selected ? 8 : 6,
-          vertical: selected ? 10 : 8,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? palette.surfaceMuted : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          border: selected
-              ? Border.all(
-                  color: palette.primary.withValues(alpha: 0.18),
-                )
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedScale(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              width: selected ? 48 : 42,
+              height: selected ? 48 : 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? palette.surfaceMuted : Colors.transparent,
+                border: selected
+                    ? Border.all(
+                        color: palette.primary.withValues(alpha: 0.18),
+                      )
+                    : null,
+              ),
+              child: Center(
+                child: AnimatedScale(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutBack,
                   scale: selected ? 1.08 : 1,
                   child: Icon(
                     icon,
                     color: color,
-                    size: selected ? 28 : 26,
+                    size: selected ? 26 : 24,
                   ),
                 ),
-                const SizedBox(height: 2),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

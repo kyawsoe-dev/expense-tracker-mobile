@@ -20,18 +20,22 @@ class GroupsScreen extends ConsumerWidget {
         title: 'Groups',
         subtitle: 'Shared spaces for couples, family, and teams',
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateGroupDialog(context, ref),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New group'),
-      ),
       body: groupsAsync.when(
         data: (groups) {
           if (groups.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Container(
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    onPressed: () => _showCreateGroupDialog(context, ref),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('New group'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
                   padding: const EdgeInsets.all(20),
                   decoration: context.appCardDecoration(),
                   child: Column(
@@ -63,7 +67,7 @@ class GroupsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-              ),
+              ],
             );
           }
 
@@ -89,93 +93,137 @@ class GroupsScreen extends ConsumerWidget {
           ),
         ),
       ),
+      floatingActionButton: groupsAsync.valueOrNull?.isNotEmpty == true
+          ? FloatingActionButton.extended(
+              onPressed: () => _showCreateGroupDialog(context, ref),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('New group'),
+            )
+          : null,
     );
   }
 
   Future<void> _showCreateGroupDialog(
       BuildContext context, WidgetRef ref) async {
-    final nameController = TextEditingController();
-    final membersController = TextEditingController();
+    final result = await showDialog<_CreateGroupDialogResult>(
+      context: context,
+      builder: (_) => const _CreateGroupDialog(),
+    );
 
-    try {
-      final shouldCreate = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Create group'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Group name',
-                  hintText: 'Home, Couple Budget, Trip...',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: membersController,
-                decoration: const InputDecoration(
-                  labelText: 'Invite members (optional)',
-                  hintText: 'ayeaye@gmail.com, mgmg@gmail.com',
-                ),
-                maxLines: 2,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldCreate != true) {
-        return;
-      }
-
-      final name = nameController.text.trim();
-      if (name.isEmpty) {
-        if (!context.mounted) {
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a group name.')),
-        );
-        return;
-      }
-
-      final memberEmails = membersController.text
-          .split(',')
-          .map((email) => email.trim())
-          .where((email) => email.isNotEmpty)
-          .toSet()
-          .toList();
-
-      await ref.read(groupRepositoryProvider).createGroup(
-            name,
-            memberEmails: memberEmails,
-          );
-      ref.invalidate(groupsProvider);
-
-      if (!context.mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Group "$name" created.')),
-      );
-    } finally {
-      nameController.dispose();
-      membersController.dispose();
+    if (result == null) {
+      return;
     }
+
+    await ref.read(groupRepositoryProvider).createGroup(
+          result.name,
+          memberEmails: result.memberEmails,
+        );
+    ref.invalidate(groupsProvider);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Group "${result.name}" created.')),
+    );
+  }
+}
+
+class _CreateGroupDialogResult {
+  final String name;
+  final List<String> memberEmails;
+
+  const _CreateGroupDialogResult({
+    required this.name,
+    required this.memberEmails,
+  });
+}
+
+class _CreateGroupDialog extends StatefulWidget {
+  const _CreateGroupDialog();
+
+  @override
+  State<_CreateGroupDialog> createState() => _CreateGroupDialogState();
+}
+
+class _CreateGroupDialogState extends State<_CreateGroupDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _membersController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _membersController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _membersController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create group'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Group name',
+              hintText: 'Home, Couple Budget, Trip...',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _membersController,
+            decoration: const InputDecoration(
+              labelText: 'Invite members (optional)',
+              hintText: 'ayeaye@gmail.com, mgmg@gmail.com',
+            ),
+            maxLines: 2,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _nameController.text.trim();
+            if (name.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please enter a group name.')),
+              );
+              return;
+            }
+
+            final memberEmails = _membersController.text
+                .split(',')
+                .map((email) => email.trim())
+                .where((email) => email.isNotEmpty)
+                .toSet()
+                .toList();
+
+            Navigator.of(context).pop(
+              _CreateGroupDialogResult(
+                name: name,
+                memberEmails: memberEmails,
+              ),
+            );
+          },
+          child: const Text('Create'),
+        ),
+      ],
+    );
   }
 }
 
