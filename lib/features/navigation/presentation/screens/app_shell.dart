@@ -188,33 +188,52 @@ class _NavItem extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 240),
         curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: selected ? 8 : 6,
+          vertical: selected ? 10 : 8,
+        ),
         decoration: BoxDecoration(
           color: selected ? palette.surfaceMuted : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
+          border: selected
+              ? Border.all(
+                  color: palette.primary.withValues(alpha: 0.18),
+                )
+              : null,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedScale(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutBack,
-              scale: selected ? 1.08 : 1,
-              child: Icon(
-                icon,
-                color: color,
-                size: selected ? 28 : 26,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  scale: selected ? 1.08 : 1,
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: selected ? 28 : 26,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
