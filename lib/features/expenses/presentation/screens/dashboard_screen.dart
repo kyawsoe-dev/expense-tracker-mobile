@@ -31,7 +31,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     await Future.wait([
       ref.read(recentExpensesProvider.future),
       ref.read(monthSummaryProvider.future),
-    ]);
+    ]).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => [],
+    );
   }
 
   Future<SessionUser> _loadUser() async {
@@ -591,6 +594,28 @@ class _TransactionCard extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
+                if (expense.groupName != null &&
+                    expense.groupName!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.accentSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      expense.groupName!,
+                      style: TextStyle(
+                        color: palette.accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
                 if (expense.note != null &&
                     expense.note!.trim().isNotEmpty) ...[
                   const SizedBox(height: 4),

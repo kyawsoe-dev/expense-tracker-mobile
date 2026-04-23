@@ -10,9 +10,18 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
 
   @override
   Future<List<Expense>> getRecentExpenses() async {
-    final response = await dio.get('/expenses', queryParameters: {'take': 20, 'skip': 0});
-    final data = (response.data as List).cast<Map<String, dynamic>>();
-    return data.map(ExpenseModel.fromJson).toList();
+    final response =
+        await dio.get('/expenses', queryParameters: {'take': 20, 'skip': 0});
+    final List<dynamic> data = response.data as List<dynamic>;
+    return data.map((e) => ExpenseModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<Expense>> getExpensesByGroup(String groupId) async {
+    final response = await dio.get('/expenses/by-group/$groupId',
+        queryParameters: {'take': 20, 'skip': 0});
+    final List<dynamic> data = response.data as List<dynamic>;
+    return data.map((e) => ExpenseModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override
@@ -28,12 +37,14 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
     required String category,
     required DateTime date,
     String? note,
+    String? groupId,
   }) async {
     final payload = <String, dynamic>{
       'title': title,
       'amount': amount,
       'category': category,
       'date': date.toIso8601String(),
+      'groupId': groupId,
     };
 
     if (note != null && note.trim().isNotEmpty) {
@@ -51,12 +62,14 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
     required String category,
     required DateTime date,
     String? note,
+    String? groupId,
   }) async {
     final payload = <String, dynamic>{
       'title': title,
       'amount': amount,
       'category': category,
       'date': date.toIso8601String(),
+      'groupId': groupId,
     };
 
     if (note != null && note.trim().isNotEmpty) {

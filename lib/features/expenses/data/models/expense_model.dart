@@ -8,9 +8,15 @@ class ExpenseModel extends Expense {
     required super.category,
     required super.date,
     super.note,
+    super.groupId,
+    super.groupName,
+    super.paidByName,
+    super.paidByEmail,
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
+    final group = json['group'] as Map<String, dynamic>?;
+    final user = json['user'] as Map<String, dynamic>?;
     return ExpenseModel(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -18,6 +24,10 @@ class ExpenseModel extends Expense {
       category: json['category'] as String,
       date: DateTime.parse(json['date'] as String),
       note: json['note'] as String?,
+      groupId: (json['groupId'] as String?) ?? (group?['id'] as String?),
+      groupName: group?['name'] as String?,
+      paidByName: user?['name'] as String?,
+      paidByEmail: user?['email'] as String?,
     );
   }
 
@@ -35,6 +45,10 @@ class ExpenseModel extends Expense {
       'category': category,
       'date': date.toIso8601String(),
       'note': note,
+      'groupId': groupId,
+      'groupName': groupName,
+      'paidByName': paidByName,
+      'paidByEmail': paidByEmail,
     };
   }
 
@@ -45,6 +59,7 @@ class ExpenseModel extends Expense {
       'category': category,
       'date': date.toIso8601String(),
       'note': note,
+      'groupId': groupId,
     };
   }
 }

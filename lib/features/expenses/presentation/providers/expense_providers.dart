@@ -18,3 +18,8 @@ final monthSummaryProvider = FutureProvider<double>((ref) async {
   final repo = ref.read(expenseRepositoryProvider);
   return repo.getCurrentMonthTotal();
 });
+
+final groupExpensesProvider = FutureProvider.family<List<Expense>, String>((ref, groupId) async {
+  final repo = ref.read(expenseRepositoryProvider);
+  return repo.getExpensesByGroup(groupId);
+});

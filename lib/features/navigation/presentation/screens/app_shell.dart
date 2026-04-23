@@ -9,6 +9,7 @@ import '../../../expenses/presentation/screens/dashboard_screen.dart';
 import '../../../history/presentation/screens/history_screen.dart';
 import '../../../expenses/presentation/providers/expense_providers.dart';
 import '../../../expenses/presentation/screens/add_expense_screen.dart';
+import '../../../groups/presentation/screens/groups_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 
 class AppShell extends ConsumerStatefulWidget {
@@ -79,9 +80,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final pages = <Widget>[
       DashboardScreen(
-        onOpenProfile: () => _setIndex(2),
+        onOpenProfile: () => _setIndex(3),
         onSignOut: _signOut,
       ),
+      const GroupsScreen(),
       const HistoryScreen(),
       ProfileScreen(
         loadUser: _loadUser,
@@ -136,8 +138,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
                 Expanded(
                   child: _NavItem(
-                    icon: Icons.bar_chart_rounded,
-                    label: 'History',
+                    icon: Icons.groups_rounded,
+                    label: 'Groups',
                     selected: _currentIndex == 1,
                     onTap: () => _setIndex(1),
                   ),
@@ -149,10 +151,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
                 Expanded(
                   child: _NavItem(
-                    icon: Icons.person_rounded,
-                    label: 'Profile',
+                    icon: Icons.bar_chart_rounded,
+                    label: 'History',
                     selected: _currentIndex == 2,
                     onTap: () => _setIndex(2),
+                  ),
+                ),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.person_rounded,
+                    label: 'Profile',
+                    selected: _currentIndex == 3,
+                    onTap: () => _setIndex(3),
                   ),
                 ),
               ],

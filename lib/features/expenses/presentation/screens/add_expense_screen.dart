@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/modern_app_bar.dart';
+import '../../../groups/presentation/providers/group_providers.dart';
 import '../../domain/entities/expense.dart';
 import '../providers/expense_providers.dart';
 
@@ -26,6 +27,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _noteCtrl = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
+  String? _selectedGroupId;
 
   bool get _isEditMode => widget.initialExpense != null;
 
@@ -39,6 +41,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _categoryCtrl.text = expense.category;
       _noteCtrl.text = expense.note ?? '';
       _selectedDate = expense.date;
+      _selectedGroupId = expense.groupId;
     }
   }
 
@@ -80,6 +83,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           category: _categoryCtrl.text.trim(),
           date: _selectedDate,
           note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          groupId: _selectedGroupId,
         );
       } else {
         await repo.createExpense(
@@ -88,6 +92,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           category: _categoryCtrl.text.trim(),
           date: _selectedDate,
           note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          groupId: _selectedGroupId,
         );
       }
 
@@ -114,6 +119,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final groupsAsync = ref.watch(groupsProvider);
     final formattedDate =
         '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
@@ -239,6 +245,45 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           (value == null || value.trim().isEmpty)
                               ? 'Enter a category'
                               : null,
+                    ),
+                    const SizedBox(height: 12),
+                    groupsAsync.when(
+                      data: (groups) => DropdownButtonFormField<String?>(
+                        initialValue: _selectedGroupId,
+                        decoration: const InputDecoration(
+                          labelText: 'Group (optional)',
+                          prefixIcon: Icon(Icons.group_work_rounded),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Personal expense'),
+                          ),
+                          ...groups.map(
+                            (group) => DropdownMenuItem<String?>(
+                              value: group.id,
+                              child: Text(group.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedGroupId = value);
+                        },
+                      ),
+                      loading: () => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: LinearProgressIndicator(
+                          minHeight: 2,
+                          color: palette.primary,
+                        ),
+                      ),
+                      error: (_, __) => Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Groups unavailable right now. You can still save a personal expense.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     InkWell(

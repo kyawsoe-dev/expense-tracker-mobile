@@ -159,7 +159,13 @@ class AppPalette extends ThemeExtension<AppPalette> {
 }
 
 extension AppThemeContext on BuildContext {
-  AppPalette get palette => Theme.of(this).extension<AppPalette>()!;
+  AppPalette get palette {
+    final ext = Theme.of(this).extension<AppPalette>();
+    if (ext == null) {
+      return AppPalette.light;
+    }
+    return ext;
+  }
 
   LinearGradient get heroGradient => LinearGradient(
         colors: [palette.heroStart, palette.heroEnd],
