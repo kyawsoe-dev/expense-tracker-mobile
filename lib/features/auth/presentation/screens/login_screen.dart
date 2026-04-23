@@ -20,8 +20,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _registerNameCtrl = TextEditingController();
   final _registerEmailCtrl = TextEditingController();
   final _registerPasswordCtrl = TextEditingController();
+  final _registerConfirmPasswordCtrl = TextEditingController();
   bool _loading = false;
   bool _isRegisterMode = false;
+  bool _showLoginPassword = false;
+  bool _showRegisterPassword = false;
+  bool _showRegisterConfirmPassword = false;
 
   @override
   void dispose() {
@@ -30,6 +34,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _registerNameCtrl.dispose();
     _registerEmailCtrl.dispose();
     _registerPasswordCtrl.dispose();
+    _registerConfirmPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -244,7 +249,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     nameCtrl: _registerNameCtrl,
                                     emailCtrl: _registerEmailCtrl,
                                     passwordCtrl: _registerPasswordCtrl,
+                                    confirmPasswordCtrl:
+                                        _registerConfirmPasswordCtrl,
                                     loading: _loading,
+                                    showPassword: _showRegisterPassword,
+                                    showConfirmPassword:
+                                        _showRegisterConfirmPassword,
+                                    onTogglePassword: () {
+                                      setState(() {
+                                        _showRegisterPassword =
+                                            !_showRegisterPassword;
+                                      });
+                                    },
+                                    onToggleConfirmPassword: () {
+                                      setState(() {
+                                        _showRegisterConfirmPassword =
+                                            !_showRegisterConfirmPassword;
+                                      });
+                                    },
                                     onSubmit: _submitRegistration,
                                   )
                                 : _LoginForm(
@@ -253,6 +275,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     emailCtrl: _loginEmailCtrl,
                                     passwordCtrl: _loginPasswordCtrl,
                                     loading: _loading,
+                                    showPassword: _showLoginPassword,
+                                    onTogglePassword: () {
+                                      setState(() {
+                                        _showLoginPassword =
+                                            !_showLoginPassword;
+                                      });
+                                    },
                                     onSubmit: _submitLogin,
                                   ),
                           ),
@@ -318,6 +347,8 @@ class _LoginForm extends StatelessWidget {
   final TextEditingController emailCtrl;
   final TextEditingController passwordCtrl;
   final bool loading;
+  final bool showPassword;
+  final VoidCallback onTogglePassword;
   final Future<void> Function() onSubmit;
 
   const _LoginForm({
@@ -326,6 +357,8 @@ class _LoginForm extends StatelessWidget {
     required this.emailCtrl,
     required this.passwordCtrl,
     required this.loading,
+    required this.showPassword,
+    required this.onTogglePassword,
     required this.onSubmit,
   });
 
@@ -362,11 +395,19 @@ class _LoginForm extends StatelessWidget {
           const SizedBox(height: 12),
           TextFormField(
             controller: passwordCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(
+            obscureText: !showPassword,
+            decoration: InputDecoration(
               labelText: 'Password *',
               hintText: 'Enter your password',
-              prefixIcon: Icon(Icons.lock_outline_rounded),
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: IconButton(
+                onPressed: onTogglePassword,
+                icon: Icon(
+                  showPassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                ),
+              ),
             ),
             validator: _passwordValidator,
           ),
@@ -398,7 +439,12 @@ class _RegisterForm extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController passwordCtrl;
+  final TextEditingController confirmPasswordCtrl;
   final bool loading;
+  final bool showPassword;
+  final bool showConfirmPassword;
+  final VoidCallback onTogglePassword;
+  final VoidCallback onToggleConfirmPassword;
   final Future<void> Function() onSubmit;
 
   const _RegisterForm({
@@ -407,7 +453,12 @@ class _RegisterForm extends StatelessWidget {
     required this.nameCtrl,
     required this.emailCtrl,
     required this.passwordCtrl,
+    required this.confirmPasswordCtrl,
     required this.loading,
+    required this.showPassword,
+    required this.showConfirmPassword,
+    required this.onTogglePassword,
+    required this.onToggleConfirmPassword,
     required this.onSubmit,
   });
 
@@ -460,13 +511,48 @@ class _RegisterForm extends StatelessWidget {
           const SizedBox(height: 12),
           TextFormField(
             controller: passwordCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(
+            obscureText: !showPassword,
+            decoration: InputDecoration(
               labelText: 'Password *',
               hintText: 'At least 8 characters',
-              prefixIcon: Icon(Icons.lock_outline_rounded),
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: IconButton(
+                onPressed: onTogglePassword,
+                icon: Icon(
+                  showPassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                ),
+              ),
             ),
             validator: _passwordValidator,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: confirmPasswordCtrl,
+            obscureText: !showConfirmPassword,
+            decoration: InputDecoration(
+              labelText: 'Confirm password *',
+              hintText: 'Re-enter your password',
+              prefixIcon: const Icon(Icons.lock_reset_rounded),
+              suffixIcon: IconButton(
+                onPressed: onToggleConfirmPassword,
+                icon: Icon(
+                  showConfirmPassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                ),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please confirm your password';
+              }
+              if (value != passwordCtrl.text) {
+                return 'Passwords do not match';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 20),
           SizedBox(
