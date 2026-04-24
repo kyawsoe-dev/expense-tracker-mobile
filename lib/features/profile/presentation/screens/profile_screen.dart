@@ -74,360 +74,366 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           );
         }
 
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                gradient: heroGradient,
-                borderRadius: const BorderRadius.all(Radius.circular(28)),
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.heroStart.withValues(alpha: 0.24),
-                    blurRadius: 28,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: Colors.white.withValues(alpha: 0.14),
-                    child: Text(
-                      displayName.trim().isEmpty
-                          ? 'G'
-                          : displayName.trim().substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
+        return SafeArea(
+          bottom: false,
+          minimum: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: heroGradient,
+                  borderRadius: const BorderRadius.all(Radius.circular(28)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.heroStart.withValues(alpha: 0.24),
+                      blurRadius: 28,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor: Colors.white.withValues(alpha: 0.14),
+                      child: Text(
+                        displayName.trim().isEmpty
+                            ? 'G'
+                            : displayName.trim().substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    displayName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.76),
-                        ),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
+                    const SizedBox(height: 14),
+                    Text(
+                      displayName,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.76),
+                          ),
                     ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final statusText = Text(
-                          'Signed in and ready to manage expenses',
-                          textAlign: TextAlign.center,
-                          softWrap: true,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                        );
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final statusText = Text(
+                            'Signed in and ready to manage expenses',
+                            textAlign: TextAlign.center,
+                            softWrap: true,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                          );
 
-                        if (constraints.maxWidth < 320) {
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
+                          if (constraints.maxWidth < 320) {
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.verified_user_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                const SizedBox(height: 8),
+                                statusText,
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Icon(
                                 Icons.verified_user_rounded,
                                 color: Colors.white,
                                 size: 18,
                               ),
-                              const SizedBox(height: 8),
-                              statusText,
+                              const SizedBox(width: 8),
+                              Flexible(child: statusText),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final createButton = IntrinsicWidth(
+                          child: SizedBox(
+                            height: 40,
+                            child: FilledButton.tonalIcon(
+                              onPressed: () =>
+                                  _showCreateGroupDialog(context, ref, palette),
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('New'),
+                            ),
+                          ),
+                        );
+
+                        if (!constraints.hasBoundedWidth ||
+                            constraints.maxWidth < 340) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Expense groups',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 12),
+                              createButton,
                             ],
                           );
                         }
 
                         return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
-                              Icons.verified_user_rounded,
-                              color: Colors.white,
-                              size: 18,
+                            Expanded(
+                              child: Text(
+                                'Expense groups',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                             ),
-                            const SizedBox(width: 8),
-                            Flexible(child: statusText),
+                            const SizedBox(width: 12),
+                            createButton,
                           ],
                         );
                       },
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: cardDecoration(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final createButton = IntrinsicWidth(
-                        child: SizedBox(
-                          height: 40,
-                          child: FilledButton.tonalIcon(
-                            onPressed: () =>
-                                _showCreateGroupDialog(context, ref, palette),
-                            icon: const Icon(Icons.add_rounded, size: 18),
-                            label: const Text('New'),
-                          ),
-                        ),
-                      );
-
-                      if (!constraints.hasBoundedWidth ||
-                          constraints.maxWidth < 340) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Expense groups',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 12),
-                            createButton,
-                          ],
-                        );
-                      }
-
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Expense groups',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          createButton,
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Create groups for trips, family budgets, projects, or any shared spending bucket.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 14),
-                  groupsAsync.when(
-                    data: (groups) {
-                      if (groups.isEmpty) {
-                        return Text(
-                          'No groups yet. Create your first one to start grouping expenses.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        );
-                      }
-
-                      return Column(
-                        children: groups.map(
-                          (group) {
-                            final relation = describeGroupRelationship(group);
-                            return GestureDetector(
-                              onTap: () => _openGroupDetail(context, group),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: palette.surfaceSoft,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(color: palette.border),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 42,
-                                      height: 42,
-                                      decoration: BoxDecoration(
-                                        color: palette.surfaceMuted,
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: Icon(
-                                        relation.icon,
-                                        color: palette.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            group.name,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  color: palette.textPrimary,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            children: [
-                                              Text(
-                                                relation.label,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .labelSmall
-                                                    ?.copyWith(
-                                                      color: palette.accent,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                              Text(
-                                                group.createdAt != null
-                                                    ? 'Created ${MaterialLocalizations.of(context).formatShortDate(group.createdAt!)}'
-                                                    : 'Ready for shared expenses',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall,
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: palette.textMuted,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ).toList(),
-                      );
-                    },
-                    loading: () => const LinearProgressIndicator(minHeight: 2),
-                    error: (error, _) => Text(
-                      'Could not load groups: $error',
+                    const SizedBox(height: 6),
+                    Text(
+                      'Create groups for trips, family budgets, projects, or any shared spending bucket.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: cardDecoration(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Appearance',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Choose how the app should look on this device.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 14),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final segmentedButton = SegmentedButton<ThemeMode>(
-                        showSelectedIcon: false,
-                        segments: const [
-                          ButtonSegment<ThemeMode>(
-                            value: ThemeMode.light,
-                            icon: Icon(Icons.light_mode_rounded),
-                            label: Text('Light'),
-                          ),
-                          ButtonSegment<ThemeMode>(
-                            value: ThemeMode.dark,
-                            icon: Icon(Icons.dark_mode_rounded),
-                            label: Text('Dark'),
-                          ),
-                          ButtonSegment<ThemeMode>(
-                            value: ThemeMode.system,
-                            icon: Icon(Icons.brightness_auto_rounded),
-                            label: Text('System'),
-                          ),
-                        ],
-                        selected: {themeMode},
-                        onSelectionChanged: (selection) {
-                          final mode = selection.first;
-                          ref
-                              .read(themeModeProvider.notifier)
-                              .setThemeMode(mode);
-                        },
-                      );
+                    const SizedBox(height: 14),
+                    groupsAsync.when(
+                      data: (groups) {
+                        if (groups.isEmpty) {
+                          return Text(
+                            'No groups yet. Create your first one to start grouping expenses.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          );
+                        }
 
-                      if (constraints.maxWidth < 360) {
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
+                        return Column(
+                          children: groups.map(
+                            (group) {
+                              final relation = describeGroupRelationship(group);
+                              return GestureDetector(
+                                onTap: () => _openGroupDetail(context, group),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: palette.surfaceSoft,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(color: palette.border),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: palette.surfaceMuted,
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                        child: Icon(
+                                          relation.icon,
+                                          color: palette.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              group.name,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    color: palette.textPrimary,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                Text(
+                                                  relation.label,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                        color: palette.accent,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                                Text(
+                                                  group.createdAt != null
+                                                      ? 'Created ${MaterialLocalizations.of(context).formatShortDate(group.createdAt!)}'
+                                                      : 'Ready for shared expenses',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: palette.textMuted,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ).toList(),
+                        );
+                      },
+                      loading: () =>
+                          const LinearProgressIndicator(minHeight: 2),
+                      error: (error, _) => Text(
+                        'Could not load groups: $error',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Appearance',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Choose how the app should look on this device.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 14),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final segmentedButton = SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment<ThemeMode>(
+                              value: ThemeMode.light,
+                              icon: Icon(Icons.light_mode_rounded),
+                              label: Text('Light'),
+                            ),
+                            ButtonSegment<ThemeMode>(
+                              value: ThemeMode.dark,
+                              icon: Icon(Icons.dark_mode_rounded),
+                              label: Text('Dark'),
+                            ),
+                            ButtonSegment<ThemeMode>(
+                              value: ThemeMode.system,
+                              icon: Icon(Icons.brightness_auto_rounded),
+                              label: Text('System'),
+                            ),
+                          ],
+                          selected: {themeMode},
+                          onSelectionChanged: (selection) {
+                            final mode = selection.first;
+                            ref
+                                .read(themeModeProvider.notifier)
+                                .setThemeMode(mode);
+                          },
+                        );
+
+                        if (constraints.maxWidth < 360) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: segmentedButton,
+                          );
+                        }
+
+                        return SizedBox(
+                          width: double.infinity,
                           child: segmentedButton,
                         );
-                      }
-
-                      return SizedBox(
-                        width: double.infinity,
-                        child: segmentedButton,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: cardDecoration(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Account actions',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Use the button below to securely sign out of this device.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: widget.onSignOut,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: palette.accent,
+                      },
                     ),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Sign out'),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Account actions',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Use the button below to securely sign out of this device.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: widget.onSignOut,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: palette.accent,
+                      ),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Sign out'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -589,7 +595,8 @@ class _ProfileCreateGroupDialogState
   void _removeMemberSuggestion(GroupMemberSuggestion member) {
     setState(() {
       _selectedMembers = _selectedMembers
-          .where((item) => item.email.toLowerCase() != member.email.toLowerCase())
+          .where(
+              (item) => item.email.toLowerCase() != member.email.toLowerCase())
           .toList();
     });
   }
@@ -674,14 +681,17 @@ class _ProfileCreateGroupDialogState
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        for (var index = 0; index < _suggestions.length; index++) ...[
+                        for (var index = 0;
+                            index < _suggestions.length;
+                            index++) ...[
                           if (index > 0) const Divider(height: 1),
                           ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                             title: Text(_suggestions[index].name),
                             subtitle: Text(_suggestions[index].email),
-                            onTap: () => _addMemberSuggestion(_suggestions[index]),
+                            onTap: () =>
+                                _addMemberSuggestion(_suggestions[index]),
                           ),
                         ],
                       ],

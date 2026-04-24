@@ -87,8 +87,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             take: _pageSize,
             skip: 0,
             search: _searchController.text,
-            category:
-                _selectedCategory == 'All' ? null : _selectedCategory,
+            category: _selectedCategory == 'All' ? null : _selectedCategory,
           );
       if (!mounted) {
         return;
@@ -125,8 +124,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             take: _pageSize,
             skip: _expenses.length,
             search: _searchController.text,
-            category:
-                _selectedCategory == 'All' ? null : _selectedCategory,
+            category: _selectedCategory == 'All' ? null : _selectedCategory,
           );
       if (!mounted) {
         return;
@@ -211,7 +209,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       if (error.type == DioExceptionType.connectionError ||
           error.type == DioExceptionType.connectionTimeout ||
           error.type == DioExceptionType.receiveTimeout) {
-        return 'Cannot connect to API. Start backend at port 3000 and try again.';
+        return 'Cannot connect to API. Try again.';
       }
     }
 
@@ -316,7 +314,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ),
             const SizedBox(height: 12),
             if (_isInitialLoading)
-              const Center(child: Padding(
+              const Center(
+                  child: Padding(
                 padding: EdgeInsets.all(24),
                 child: CircularProgressIndicator(),
               ))

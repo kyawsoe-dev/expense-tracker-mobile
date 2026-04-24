@@ -31,8 +31,7 @@ Flutter mobile client for the Expense Tracker project. The app uses `Riverpod` f
 
 The app resolves API base URL like this:
 
-- Android emulator: `http://10.0.2.2:3000/api/v1`
-- Web / iOS simulator / desktop: `http://127.0.0.1:3000/api/v1`
+- Default production URL: `https://expense-tracker-backend-47s3.vercel.app/api/v1`
 
 You can override it at build time with:
 
@@ -69,6 +68,33 @@ flutter run
 - `flutter analyze`: run static analysis
 - `dart format lib`: format source files
 
+## Production Release
+
+Android production release is prepared in this repo.
+
+- Release guide: [RELEASE.md](/Users/passiongeekmm-002/Documents/TestingCodeX/mobile/RELEASE.md)
+- Release signing config: `mobile/android/key.properties`
+- Recommended build:
+- Smallest Play Store upload:
+
+```bash
+cd mobile
+flutter build appbundle --release \
+  --obfuscate \
+  --split-debug-info=build/debug-info \
+  --dart-define=API_BASE_URL=https://expense-tracker-backend-47s3.vercel.app/api/v1
+```
+
+For a smaller directly installable APK, use split-per-ABI:
+
+```bash
+cd mobile
+flutter build apk --release --split-per-abi \
+  --obfuscate \
+  --split-debug-info=build/debug-info \
+  --dart-define=API_BASE_URL=https://expense-tracker-backend-47s3.vercel.app/api/v1
+```
+
 ## Project Structure
 
 - `lib/main.dart`: app bootstrap, auth gate, theme wiring
@@ -95,7 +121,6 @@ Users can switch theme mode from the Profile screen.
 
 Check that:
 
-- the backend is running on port `3000`
 - the emulator/device can reach the configured base URL
 - your `API_BASE_URL` override matches the correct host for the device
 

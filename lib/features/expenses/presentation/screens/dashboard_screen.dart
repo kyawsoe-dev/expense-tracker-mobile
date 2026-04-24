@@ -71,7 +71,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (error.type == DioExceptionType.connectionError ||
           error.type == DioExceptionType.connectionTimeout ||
           error.type == DioExceptionType.receiveTimeout) {
-        return 'Cannot connect to API. Start backend at port 3000 and try again.';
+        return 'Cannot connect to API. Try again.';
       }
       if (error.response?.statusCode == 401) {
         return 'Session expired. Please log in again.';

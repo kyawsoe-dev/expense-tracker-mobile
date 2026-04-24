@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 @immutable
 class AppPalette extends ThemeExtension<AppPalette> {
@@ -227,6 +228,19 @@ class AppTheme {
       surface: palette.surface,
     );
 
+    final isLight = brightness == Brightness.light;
+    final statusBarStyle = isLight
+        ? SystemUiOverlayStyle.dark.copyWith(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          )
+        : SystemUiOverlayStyle.light.copyWith(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          );
+
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
@@ -239,6 +253,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         foregroundColor: palette.textPrimary,
+        systemOverlayStyle: statusBarStyle,
       ),
       textTheme: TextTheme(
         headlineMedium: TextStyle(
