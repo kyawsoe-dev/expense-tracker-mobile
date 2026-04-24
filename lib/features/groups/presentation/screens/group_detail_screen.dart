@@ -8,6 +8,7 @@ import '../../../expenses/domain/entities/expense.dart';
 import '../../../expenses/presentation/providers/expense_providers.dart';
 import '../../domain/entities/expense_group.dart';
 import '../../domain/entities/group_balance.dart';
+import '../group_relationship.dart';
 import '../providers/group_providers.dart';
 
 class GroupDetailScreen extends ConsumerWidget {
@@ -24,12 +25,13 @@ class GroupDetailScreen extends ConsumerWidget {
     final detailAsync = ref.watch(groupDetailProvider(group.id));
     final expensesAsync = ref.watch(groupExpensesProvider(group.id));
     final amount = NumberFormat.currency(symbol: 'MMK ', decimalDigits: 0);
+    final relation = describeGroupRelationship(group);
 
     return Scaffold(
       backgroundColor: palette.background,
       appBar: ModernAppBar(
         title: group.name,
-        subtitle: 'Shared group expenses',
+        subtitle: '${relation.label} collaboration space',
       ),
       body: detailAsync.when(
         data: (detail) => expensesAsync.when(
@@ -44,12 +46,13 @@ class GroupDetailScreen extends ConsumerWidget {
                   total: total,
                   expenseCount: expenses.length,
                   amount: amount,
+                  relation: describeGroupRelationship(detail),
                 ),
                 const SizedBox(height: 18),
                 _SectionCard(
                   title: 'Members',
                   subtitle:
-                      'Invite people into this group so they can add and view shared expenses.',
+                      '${describeGroupRelationship(detail).summary} Invite people so they can add and view shared expenses together.',
                   trailing: SizedBox(
                     height: 40,
                     child: FilledButton.tonalIcon(
@@ -203,28 +206,43 @@ class GroupDetailScreen extends ConsumerWidget {
     try {
       final shouldAdd = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Add member'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Member email',
-              hintText: 'ayeaye@gmail.com',
+        builder: (dialogContext) {
+          Future<void> closeDialog([bool? result]) async {
+            FocusScope.of(dialogContext).unfocus();
+            await Future<void>.delayed(Duration.zero);
+            final navigator = Navigator.of(dialogContext);
+            if (navigator.canPop()) {
+              navigator.pop(result);
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Add member'),
+            content: TextField(
+              controller: controller,
+              autofocus: false,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Member email',
+                hintText: 'ayeaye@gmail.com',
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Add'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  closeDialog(false);
+                },
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  closeDialog(true);
+                },
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
       );
 
       if (shouldAdd != true) {
@@ -278,12 +296,14 @@ class _GroupHeroCard extends StatelessWidget {
   final double total;
   final int expenseCount;
   final NumberFormat amount;
+  final GroupRelationshipDescriptor relation;
 
   const _GroupHeroCard({
     required this.group,
     required this.total,
     required this.expenseCount,
     required this.amount,
+    required this.relation,
   });
 
   @override
@@ -319,7 +339,7 @@ class _GroupHeroCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
-                    '${group.members.length} members',
+                    relation.label,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -337,9 +357,16 @@ class _GroupHeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$expenseCount shared transactions in this group',
+                  '$expenseCount shared transactions across ${group.members.length} member${group.members.length == 1 ? '' : 's'}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.white.withValues(alpha: 0.74),
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  relation.summary,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.82),
                       ),
                 ),
               ],

@@ -66,4 +66,35 @@ class ExpenseGroupModel extends ExpenseGroup {
     }
     return 0;
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'createdAt': createdAt?.toIso8601String(),
+      'members': members
+          .map(
+            (member) => {
+              'id': member.id,
+              'email': member.email,
+              'name': member.name,
+              'role': member.role,
+              'joinedAt': member.joinedAt?.toIso8601String(),
+            },
+          )
+          .toList(),
+      'balances': balances
+          .map(
+            (balance) => {
+              'userId': balance.userId,
+              'email': balance.email,
+              'name': balance.name,
+              'paid': balance.paid,
+              'owes': balance.owes,
+              'balance': balance.balance,
+            },
+          )
+          .toList(),
+    };
+  }
 }

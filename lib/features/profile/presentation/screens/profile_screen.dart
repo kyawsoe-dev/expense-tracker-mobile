@@ -4,6 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/session/session_user.dart';
 import '../../../../core/theme/theme_mode_provider.dart';
 import '../../../groups/domain/entities/expense_group.dart';
+import '../../../groups/presentation/group_relationship.dart';
 import '../../../groups/presentation/providers/group_providers.dart';
 import '../../../groups/presentation/screens/group_detail_screen.dart';
 
@@ -238,71 +239,88 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       }
 
                       return Column(
-                        children: groups
-                            .map(
-                              (group) => GestureDetector(
-                                onTap: () => _openGroupDetail(context, group),
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: palette.surfaceSoft,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(color: palette.border),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 42,
-                                        height: 42,
-                                        decoration: BoxDecoration(
-                                          color: palette.surfaceMuted,
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                        ),
-                                        child: Icon(
-                                          Icons.groups_rounded,
-                                          color: palette.primary,
-                                        ),
+                        children: groups.map(
+                          (group) {
+                            final relation = describeGroupRelationship(group);
+                            return GestureDetector(
+                              onTap: () => _openGroupDetail(context, group),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: palette.surfaceSoft,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: palette.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        color: palette.surfaceMuted,
+                                        borderRadius: BorderRadius.circular(14),
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              group.name,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.copyWith(
-                                                    color: palette.textPrimary,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              group.createdAt != null
-                                                  ? 'Created ${MaterialLocalizations.of(context).formatShortDate(group.createdAt!)}'
-                                                  : 'View expenses',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                          ],
-                                        ),
+                                      child: Icon(
+                                        relation.icon,
+                                        color: palette.primary,
                                       ),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        color: palette.textMuted,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            group.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: palette.textPrimary,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              Text(
+                                                relation.label,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: palette.accent,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              Text(
+                                                group.createdAt != null
+                                                    ? 'Created ${MaterialLocalizations.of(context).formatShortDate(group.createdAt!)}'
+                                                    : 'Ready for shared expenses',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: palette.textMuted,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            )
-                            .toList(),
+                            );
+                          },
+                        ).toList(),
                       );
                     },
                     loading: () => const LinearProgressIndicator(minHeight: 2),
@@ -472,6 +490,17 @@ class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _membersController;
 
+  void _closeDialog([_ProfileCreateGroupDialogResult? result]) {
+    if (!mounted) {
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop(result);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -493,6 +522,19 @@ class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              'Create a shared space for couples, friends, family plans, or trip spending. New groups can be synced later if the device is offline.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _nameController,
             autofocus: true,
@@ -514,7 +556,7 @@ class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _closeDialog,
           child: const Text('Cancel'),
         ),
         FilledButton(
@@ -533,8 +575,7 @@ class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
                 .where((email) => email.isNotEmpty)
                 .toSet()
                 .toList();
-
-            Navigator.of(context).pop(
+            _closeDialog(
               _ProfileCreateGroupDialogResult(
                 name: name,
                 memberEmails: memberEmails,

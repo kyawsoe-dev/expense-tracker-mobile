@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/modern_app_bar.dart';
+import '../group_relationship.dart';
 import '../../domain/entities/expense_group.dart';
 import '../providers/group_providers.dart';
 import 'group_detail_screen.dart';
@@ -26,6 +27,8 @@ class GroupsScreen extends ConsumerWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: [
+                _SupportCard(palette: palette),
+                const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: FilledButton.icon(
@@ -172,6 +175,19 @@ class _CreateGroupDialogState extends State<_CreateGroupDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.palette.surfaceSoft,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              'Good for couples, friends, trips, family budgets, and shared project spending.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _nameController,
             autofocus: true,
@@ -235,6 +251,7 @@ class _GroupTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final relation = describeGroupRelationship(group);
 
     return InkWell(
       borderRadius: BorderRadius.circular(22),
@@ -258,7 +275,7 @@ class _GroupTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
-                Icons.groups_rounded,
+                relation.icon,
                 color: palette.primary,
               ),
             ),
@@ -274,8 +291,53 @@ class _GroupTile extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.accentSoft,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              relation.icon,
+                              size: 14,
+                              color: palette.accent,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              relation.label,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: palette.accent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '${group.members.length} member${group.members.length == 1 ? '' : 's'}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   Text(
-                    '${group.members.length} member${group.members.length == 1 ? '' : 's'}',
+                    relation.summary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -287,6 +349,94 @@ class _GroupTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SupportCard extends StatelessWidget {
+  final AppPalette palette;
+
+  const _SupportCard({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: context.appCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Built for real shared relationships',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: const [
+              _SupportChip(
+                label: 'Couples',
+                icon: Icons.favorite_border_rounded,
+              ),
+              _SupportChip(
+                label: 'Friends',
+                icon: Icons.diversity_3_rounded,
+              ),
+              _SupportChip(
+                label: 'Family',
+                icon: Icons.home_work_outlined,
+              ),
+              _SupportChip(
+                label: 'Trips',
+                icon: Icons.luggage_rounded,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Create a shared group now, and even if you go offline the app can keep your latest data nearby and sync changes later.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupportChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _SupportChip({
+    required this.label,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: palette.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
   }

@@ -6,7 +6,8 @@ import '../../domain/repositories/expense_repository.dart';
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
   final dio = ref.read(dioProvider);
-  return ExpenseRepositoryImpl(dio);
+  final offlineStore = ref.read(offlineStoreProvider);
+  return ExpenseRepositoryImpl(dio, offlineStore);
 });
 
 final recentExpensesProvider = FutureProvider<List<Expense>>((ref) async {
@@ -19,7 +20,8 @@ final monthSummaryProvider = FutureProvider<double>((ref) async {
   return repo.getCurrentMonthTotal();
 });
 
-final groupExpensesProvider = FutureProvider.family<List<Expense>, String>((ref, groupId) async {
+final groupExpensesProvider =
+    FutureProvider.family<List<Expense>, String>((ref, groupId) async {
   final repo = ref.read(expenseRepositoryProvider);
   return repo.getExpensesByGroup(groupId);
 });

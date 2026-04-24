@@ -40,10 +40,18 @@ class TokenStorage {
 
   Future<String?> readThemeMode() => _storage.read(key: _themeModeKey);
 
+  Future<void> writeValue({required String key, required String value}) =>
+      _storage.write(key: key, value: value);
+
+  Future<String?> readValue(String key) => _storage.read(key: key);
+
+  Future<void> deleteValue(String key) => _storage.delete(key: key);
+
   Future<void> clear() async {
-    await _storage.delete(key: _accessTokenKey);
-    await _storage.delete(key: _refreshTokenKey);
-    await _storage.delete(key: _userEmailKey);
-    await _storage.delete(key: _userNameKey);
+    final savedThemeMode = await _storage.read(key: _themeModeKey);
+    await _storage.deleteAll();
+    if (savedThemeMode != null && savedThemeMode.isNotEmpty) {
+      await _storage.write(key: _themeModeKey, value: savedThemeMode);
+    }
   }
 }

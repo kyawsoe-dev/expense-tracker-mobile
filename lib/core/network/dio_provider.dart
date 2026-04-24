@@ -1,10 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../offline/offline_store.dart';
 import '../storage/token_storage.dart';
 import 'auth_interceptor.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
+final offlineStoreProvider = Provider<OfflineStore>(
+    (ref) => OfflineStore(ref.read(tokenStorageProvider)));
 
 String _resolveBaseUrl() {
   const fromEnv = String.fromEnvironment('API_BASE_URL');

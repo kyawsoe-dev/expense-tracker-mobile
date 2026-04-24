@@ -153,6 +153,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       expenseCount: expenses.length,
                       topCategory: topCategory,
                     ),
+                    const SizedBox(height: 14),
+                    _SyncReadyCard(),
                     const SizedBox(height: 18),
                     _SectionHeader(
                       title: 'Analytics',
@@ -329,6 +331,57 @@ class _BalanceCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SyncReadyCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: context.appCardDecoration(
+        color: palette.surfaceSoft,
+        radius: 24,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: palette.surfaceMuted,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.sync_rounded,
+              color: palette.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Offline-ready flow',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your latest expenses and groups can stay visible offline. New offline changes are prepared to sync when the app reconnects.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ],
       ),

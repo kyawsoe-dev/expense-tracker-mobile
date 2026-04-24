@@ -180,7 +180,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Keep category, amount, and date clear so analytics stay accurate.',
+                            'Keep category, amount, and date clear so analytics stay accurate. If you are offline, new entries can sync later.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
@@ -245,6 +245,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           (value == null || value.trim().isEmpty)
                               ? 'Enter a category'
                               : null,
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: palette.surfaceSoft,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: palette.border),
+                      ),
+                      child: Text(
+                        'Personal and shared expenses stay usable offline with the latest cached data, then sync once the connection comes back.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     groupsAsync.when(

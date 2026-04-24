@@ -6,7 +6,8 @@ import '../../domain/repositories/group_repository.dart';
 
 final groupRepositoryProvider = Provider<GroupRepository>((ref) {
   final dio = ref.read(dioProvider);
-  return GroupRepositoryImpl(dio);
+  final offlineStore = ref.read(offlineStoreProvider);
+  return GroupRepositoryImpl(dio, offlineStore);
 });
 
 final groupsProvider = FutureProvider<List<ExpenseGroup>>((ref) async {
