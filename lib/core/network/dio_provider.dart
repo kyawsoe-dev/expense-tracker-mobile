@@ -13,13 +13,13 @@ String _resolveBaseUrl() {
   const fromEnv = String.fromEnvironment('API_BASE_URL');
   if (fromEnv.isNotEmpty) return fromEnv;
 
-  if (kIsWeb) return 'http://127.0.0.1:3000/api/v1';
+  if (kIsWeb) return 'https://expense-tracker-backend-47s3.vercel.app/api/v1';
 
   switch (defaultTargetPlatform) {
     case TargetPlatform.android:
-      return 'http://10.0.2.2:3000/api/v1';
+      return 'https://expense-tracker-backend-47s3.vercel.app/api/v1';
     default:
-      return 'http://127.0.0.1:3000/api/v1';
+      return 'https://expense-tracker-backend-47s3.vercel.app/api/v1';
   }
 }
 

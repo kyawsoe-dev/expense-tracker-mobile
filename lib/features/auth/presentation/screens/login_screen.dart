@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/navigation/app_router.dart';
 import '../../../../core/network/dio_provider.dart';
+import '../../../../core/session/session_state.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -96,6 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
 
+      await tokenStorage.clear();
       await tokenStorage.writeTokens(
         accessToken: access,
         refreshToken: refresh,
@@ -104,6 +106,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: user?['email'] as String?,
         name: user?['name'] as String?,
       );
+      resetSignedInData(ref);
 
       if (!mounted) {
         return;

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/navigation/app_router.dart';
 import '../../../../core/network/dio_provider.dart';
 import '../../../../core/session/session_user.dart';
+import '../../../../core/session/session_state.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../expenses/presentation/screens/dashboard_screen.dart';
 import '../../../history/presentation/screens/history_screen.dart';
@@ -53,6 +54,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       // Local signout still succeeds if the API call fails.
     } finally {
       await storage.clear();
+      resetSignedInData(ref);
     }
 
     if (!mounted) {
@@ -96,7 +98,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     if (created == true) {
       ref.invalidate(recentExpensesProvider);
-      ref.invalidate(monthSummaryProvider);
+      ref.invalidate(monthOverviewProvider);
+      ref.invalidate(yearAnalyticsProvider);
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,7 @@ import '../../../expenses/domain/entities/expense.dart';
 import '../../../expenses/presentation/providers/expense_providers.dart';
 import '../../domain/entities/expense_group.dart';
 import '../../domain/entities/group_balance.dart';
+import '../../domain/entities/group_member_suggestion.dart';
 import '../group_relationship.dart';
 import '../providers/group_providers.dart';
 
@@ -201,55 +204,16 @@ class GroupDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _showAddMemberDialog(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController();
-
     try {
-      final shouldAdd = await showDialog<bool>(
+      final email = await showDialog<String>(
         context: context,
-        builder: (dialogContext) {
-          Future<void> closeDialog([bool? result]) async {
-            FocusScope.of(dialogContext).unfocus();
-            await Future<void>.delayed(Duration.zero);
-            final navigator = Navigator.of(dialogContext);
-            if (navigator.canPop()) {
-              navigator.pop(result);
-            }
-          }
-
-          return AlertDialog(
-            title: const Text('Add member'),
-            content: TextField(
-              controller: controller,
-              autofocus: false,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Member email',
-                hintText: 'ayeaye@gmail.com',
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  closeDialog(false);
-                },
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  closeDialog(true);
-                },
-                child: const Text('Add'),
-              ),
-            ],
-          );
-        },
+        builder: (_) => _AddMemberDialog(groupId: group.id),
       );
 
-      if (shouldAdd != true) {
+      if (email == null) {
         return;
       }
 
-      final email = controller.text.trim();
       if (email.isEmpty) {
         if (!context.mounted) {
           return;
@@ -285,9 +249,152 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ),
       );
-    } finally {
-      controller.dispose();
     }
+  }
+}
+
+class _AddMemberDialog extends ConsumerStatefulWidget {
+  final String groupId;
+
+  const _AddMemberDialog({
+    required this.groupId,
+  });
+
+  @override
+  ConsumerState<_AddMemberDialog> createState() => _AddMemberDialogState();
+}
+
+class _AddMemberDialogState extends ConsumerState<_AddMemberDialog> {
+  late final TextEditingController _controller;
+  Timer? _debounce;
+  List<GroupMemberSuggestion> _suggestions = const [];
+  bool _isSearching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _closeDialog([String? result]) {
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(result);
+  }
+
+  void _onEmailChanged(String value) {
+    _debounce?.cancel();
+
+    final query = value.trim();
+    if (query.length < 2) {
+      setState(() {
+        _suggestions = const [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
+      setState(() => _isSearching = true);
+      try {
+        final results = await ref
+            .read(groupRepositoryProvider)
+            .searchMemberSuggestions(
+              query,
+              groupId: widget.groupId,
+            );
+        if (!mounted || _controller.text.trim() != query) {
+          return;
+        }
+        setState(() {
+          _suggestions = results;
+          _isSearching = false;
+        });
+      } on DioException {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _suggestions = const [];
+          _isSearching = false;
+        });
+      }
+    });
+  }
+
+  void _selectSuggestion(GroupMemberSuggestion member) {
+    _controller.text = member.email;
+    _controller.selection = TextSelection.collapsed(
+      offset: _controller.text.length,
+    );
+    setState(() {
+      _suggestions = const [];
+      _isSearching = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add member'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            onChanged: _onEmailChanged,
+            autofocus: false,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Member email',
+              hintText: 'Type user email',
+            ),
+          ),
+          if (_isSearching) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(minHeight: 2),
+          ] else if (_suggestions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var index = 0; index < _suggestions.length; index++) ...[
+                      if (index > 0) const Divider(height: 1),
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_suggestions[index].name),
+                        subtitle: Text(_suggestions[index].email),
+                        onTap: () => _selectSuggestion(_suggestions[index]),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => _closeDialog(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => _closeDialog(_controller.text.trim()),
+          child: const Text('Add'),
+        ),
+      ],
+    );
   }
 }
 

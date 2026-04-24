@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -17,12 +19,130 @@ class HistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
+  static const _pageSize = 20;
+
   String _selectedCategory = 'All';
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+
+  Timer? _searchDebounce;
+  List<Expense> _expenses = const [];
+  bool _isInitialLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _total = 0;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+    _loadInitial();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
     ref.invalidate(recentExpensesProvider);
-    ref.invalidate(monthSummaryProvider);
-    await ref.read(recentExpensesProvider.future);
+    ref.invalidate(monthOverviewProvider);
+    ref.invalidate(yearAnalyticsProvider);
+    await _loadInitial();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients || _isLoadingMore || !_hasMore) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 240) {
+      _loadMore();
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      _loadInitial();
+    });
+  }
+
+  Future<void> _loadInitial() async {
+    setState(() {
+      _isInitialLoading = true;
+      _errorMessage = null;
+      _hasMore = true;
+    });
+
+    try {
+      final page = await ref.read(expenseRepositoryProvider).getExpenseHistory(
+            take: _pageSize,
+            skip: 0,
+            search: _searchController.text,
+            category:
+                _selectedCategory == 'All' ? null : _selectedCategory,
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _expenses = page.items;
+        _total = page.total;
+        _hasMore = page.hasMore;
+        _isInitialLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = _friendlyError(error);
+        _expenses = const [];
+        _total = 0;
+        _hasMore = false;
+        _isInitialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) {
+      return;
+    }
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final page = await ref.read(expenseRepositoryProvider).getExpenseHistory(
+            take: _pageSize,
+            skip: _expenses.length,
+            search: _searchController.text,
+            category:
+                _selectedCategory == 'All' ? null : _selectedCategory,
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _expenses = [..._expenses, ...page.items];
+        _total = page.total;
+        _hasMore = page.hasMore;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isLoadingMore = false);
+    }
   }
 
   Future<void> _editExpense(Expense expense) async {
@@ -79,10 +199,29 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
   }
 
+  String _friendlyError(Object error) {
+    if (error is DioException) {
+      final serverMessage = error.response?.data is Map<String, dynamic>
+          ? error.response?.data['message'] as String?
+          : null;
+      if (serverMessage != null && serverMessage.trim().isNotEmpty) {
+        return serverMessage;
+      }
+
+      if (error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout) {
+        return 'Cannot connect to API. Start backend at port 3000 and try again.';
+      }
+    }
+
+    return 'Could not load history right now.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final expensesAsync = ref.watch(recentExpensesProvider);
+    final categories = <String>{'All', ..._expenses.map((e) => e.category)};
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -92,104 +231,136 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: expensesAsync.when(
-          data: (expenses) {
-            final categories = <String>{
-              'All',
-              ...expenses.map((e) => e.category)
-            };
-            final filtered = _selectedCategory == 'All'
-                ? expenses
-                : expenses
-                    .where((e) => e.category == _selectedCategory)
-                    .toList();
-
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(18, 8, 18, 110),
-              children: [
-                _HistoryHeader(
-                  expenses: filtered,
-                  selectedCategory: _selectedCategory,
+        child: ListView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 110),
+          children: [
+            _HistoryHeader(
+              expenses: _expenses,
+              selectedCategory: _selectedCategory,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Search records',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Search title, note, category, or group',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: palette.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: palette.border),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Categories',
-                  style: Theme.of(context).textTheme.titleMedium,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: palette.border),
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: categories.map((category) {
-                    final selected = _selectedCategory == category;
-                    return ChoiceChip(
-                      label: Text(category),
-                      selected: selected,
-                      labelStyle: TextStyle(
-                        color: selected ? Colors.white : palette.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      onSelected: (_) =>
-                          setState(() => _selectedCategory = category),
-                    );
-                  }).toList(),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Categories',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: categories.map((category) {
+                final selected = _selectedCategory == category;
+                return ChoiceChip(
+                  label: Text(category),
+                  selected: selected,
+                  labelStyle: TextStyle(
+                    color: selected ? Colors.white : palette.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  onSelected: (_) {
+                    setState(() => _selectedCategory = category);
+                    _loadInitial();
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 18),
+            _CategoryChartCard(
+              expenses: _expenses,
+              selectedCategory: _selectedCategory,
+            ),
+            const SizedBox(height: 18),
+            _SectionHeader(
+              title: 'Recent records',
+              trailing: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: palette.surfaceMuted,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(height: 18),
-                _CategoryChartCard(
-                  expenses: filtered,
-                  selectedCategory: _selectedCategory,
-                ),
-                const SizedBox(height: 18),
-                _SectionHeader(
-                  title: 'Recent records',
-                  trailing: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: palette.surfaceMuted,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      '${filtered.length} items',
-                      style: TextStyle(
-                        color: palette.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
+                child: Text(
+                  '$_total items',
+                  style: TextStyle(
+                    color: palette.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 12),
-                if (filtered.isEmpty)
-                  const _HistoryEmptyState()
-                else
-                  ...filtered.map(
-                    (expense) => _HistoryCard(
-                      expense: expense,
-                      onEdit: () => _editExpense(expense),
-                      onDelete: () => _deleteExpense(expense),
-                    ),
-                  ),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Container(
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_isInitialLoading)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              ))
+            else if (_errorMessage != null)
+              Container(
                 padding: const EdgeInsets.all(18),
                 decoration: context.appCardDecoration(),
                 child: Text(
-                  'Could not load history: $error',
+                  _errorMessage!,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: palette.textPrimary,
                       ),
                 ),
+              )
+            else if (_expenses.isEmpty)
+              _HistoryEmptyState(
+                hasSearch: _searchController.text.trim().isNotEmpty,
+                selectedCategory: _selectedCategory,
+              )
+            else ...[
+              ..._expenses.map(
+                (expense) => _HistoryCard(
+                  expense: expense,
+                  onEdit: () => _editExpense(expense),
+                  onDelete: () => _deleteExpense(expense),
+                ),
               ),
-            ),
-          ),
+              if (_isLoadingMore)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_hasMore)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Center(
+                    child: Text(
+                      'Scroll for more records',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+            ],
+          ],
         ),
       ),
     );
@@ -607,7 +778,13 @@ class _HistoryCard extends StatelessWidget {
 }
 
 class _HistoryEmptyState extends StatelessWidget {
-  const _HistoryEmptyState();
+  final bool hasSearch;
+  final String selectedCategory;
+
+  const _HistoryEmptyState({
+    required this.hasSearch,
+    required this.selectedCategory,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -632,12 +809,18 @@ class _HistoryEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'No expenses match this category yet.',
+            hasSearch
+                ? 'No expenses match your search yet.'
+                : 'No expenses match this category yet.',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
           Text(
-            'Try another category or add a new expense to see it here.',
+            hasSearch
+                ? 'Try another keyword or clear search to load more records.'
+                : selectedCategory == 'All'
+                    ? 'Add a new expense to start building your history.'
+                    : 'Try another category or add a new expense to see it here.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],

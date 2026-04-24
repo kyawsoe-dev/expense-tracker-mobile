@@ -1,9 +1,13 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/session/session_user.dart';
 import '../../../../core/theme/theme_mode_provider.dart';
 import '../../../groups/domain/entities/expense_group.dart';
+import '../../../groups/domain/entities/group_member_suggestion.dart';
 import '../../../groups/presentation/group_relationship.dart';
 import '../../../groups/presentation/providers/group_providers.dart';
 import '../../../groups/presentation/screens/group_detail_screen.dart';
@@ -478,17 +482,22 @@ class _ProfileCreateGroupDialogResult {
   });
 }
 
-class _ProfileCreateGroupDialog extends StatefulWidget {
+class _ProfileCreateGroupDialog extends ConsumerStatefulWidget {
   const _ProfileCreateGroupDialog();
 
   @override
-  State<_ProfileCreateGroupDialog> createState() =>
+  ConsumerState<_ProfileCreateGroupDialog> createState() =>
       _ProfileCreateGroupDialogState();
 }
 
-class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
+class _ProfileCreateGroupDialogState
+    extends ConsumerState<_ProfileCreateGroupDialog> {
   late final TextEditingController _nameController;
-  late final TextEditingController _membersController;
+  late final TextEditingController _inviteController;
+  Timer? _debounce;
+  List<GroupMemberSuggestion> _suggestions = const [];
+  List<GroupMemberSuggestion> _selectedMembers = const [];
+  bool _isSearching = false;
 
   void _closeDialog([_ProfileCreateGroupDialogResult? result]) {
     if (!mounted) {
@@ -505,54 +514,184 @@ class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
-    _membersController = TextEditingController();
+    _inviteController = TextEditingController();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _nameController.dispose();
-    _membersController.dispose();
+    _inviteController.dispose();
     super.dispose();
+  }
+
+  void _onInviteChanged(String value) {
+    _debounce?.cancel();
+
+    final query = value.trim();
+    if (query.length < 2) {
+      setState(() {
+        _isSearching = false;
+        _suggestions = const [];
+      });
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
+      setState(() => _isSearching = true);
+      try {
+        final results = await ref
+            .read(groupRepositoryProvider)
+            .searchMemberSuggestions(query);
+        if (!mounted || _inviteController.text.trim() != query) {
+          return;
+        }
+        final selectedEmails = _selectedMembers
+            .map((member) => member.email.toLowerCase())
+            .toSet();
+        setState(() {
+          _suggestions = results
+              .where(
+                (member) =>
+                    !selectedEmails.contains(member.email.toLowerCase()),
+              )
+              .toList();
+          _isSearching = false;
+        });
+      } on DioException {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _suggestions = const [];
+          _isSearching = false;
+        });
+      }
+    });
+  }
+
+  void _addMemberSuggestion(GroupMemberSuggestion member) {
+    final alreadySelected = _selectedMembers.any(
+      (item) => item.email.toLowerCase() == member.email.toLowerCase(),
+    );
+    if (alreadySelected) {
+      return;
+    }
+
+    setState(() {
+      _selectedMembers = [..._selectedMembers, member];
+      _inviteController.clear();
+      _suggestions = const [];
+      _isSearching = false;
+    });
+  }
+
+  void _removeMemberSuggestion(GroupMemberSuggestion member) {
+    setState(() {
+      _selectedMembers = _selectedMembers
+          .where((item) => item.email.toLowerCase() != member.email.toLowerCase())
+          .toList();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Create group'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              'Create a shared space for couples, friends, family plans, or trip spending. New groups can be synced later if the device is offline.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'Create a shared space for couples, friends, family plans, or trip spending. New groups can be synced later if the device is offline.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _nameController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Group name',
+                  hintText: 'Trip, Home, Team budget...',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _inviteController,
+                onChanged: _onInviteChanged,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Invite members (optional)',
+                  hintText: 'Type member email',
+                ),
+              ),
+              if (_selectedMembers.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _selectedMembers
+                        .map(
+                          (member) => InputChip(
+                            label: Text(member.email),
+                            avatar: CircleAvatar(
+                              child: Text(
+                                member.name.isEmpty
+                                    ? member.email.substring(0, 1).toUpperCase()
+                                    : member.name.substring(0, 1).toUpperCase(),
+                              ),
+                            ),
+                            onDeleted: () => _removeMemberSuggestion(member),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+              if (_isSearching) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(minHeight: 2),
+              ] else if (_suggestions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 160),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var index = 0; index < _suggestions.length; index++) ...[
+                          if (index > 0) const Divider(height: 1),
+                          ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(_suggestions[index].name),
+                            subtitle: Text(_suggestions[index].email),
+                            onTap: () => _addMemberSuggestion(_suggestions[index]),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _nameController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Group name',
-              hintText: 'Trip, Home, Team budget...',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _membersController,
-            decoration: const InputDecoration(
-              labelText: 'Invite members (optional)',
-              hintText: 'ayeaye@gmail.com, mgmg@gmail.com',
-            ),
-            maxLines: 2,
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -569,16 +708,13 @@ class _ProfileCreateGroupDialogState extends State<_ProfileCreateGroupDialog> {
               return;
             }
 
-            final memberEmails = _membersController.text
-                .split(',')
-                .map((email) => email.trim())
-                .where((email) => email.isNotEmpty)
-                .toSet()
-                .toList();
             _closeDialog(
               _ProfileCreateGroupDialogResult(
                 name: name,
-                memberEmails: memberEmails,
+                memberEmails: _selectedMembers
+                    .map((member) => member.email.trim())
+                    .toSet()
+                    .toList(),
               ),
             );
           },

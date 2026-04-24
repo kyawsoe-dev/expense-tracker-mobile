@@ -2,7 +2,11 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/offline/offline_store.dart';
 import '../../../../core/offline/offline_utils.dart';
+import '../../domain/entities/expense_category_total.dart';
 import '../../domain/entities/expense.dart';
+import '../../domain/entities/expense_history_page.dart';
+import '../../domain/entities/expense_month_summary.dart';
+import '../../domain/entities/expense_year_analytics.dart';
 import '../../domain/repositories/expense_repository.dart';
 import '../models/expense_model.dart';
 
@@ -24,7 +28,7 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
       await _syncPendingActions();
       final response =
           await dio.get('/expenses', queryParameters: {'take': 20, 'skip': 0});
-      final expenses = _decodeExpenses(response.data);
+      final expenses = _decodeExpensePage(response.data).items;
       await _writeExpensesCache(_recentExpensesCacheKey, expenses);
       return expenses;
     } on DioException catch (error) {
@@ -71,26 +75,114 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
 
   @override
   Future<double> getCurrentMonthTotal() async {
+    final summary = await getMonthSummary();
+    return summary.total;
+  }
+
+  @override
+  Future<ExpenseHistoryPage> getExpenseHistory({
+    int take = 20,
+    int skip = 0,
+    String? search,
+    String? category,
+    int? year,
+    int? month,
+  }) async {
     try {
       await _syncPendingActions();
-      final response = await dio.get('/expenses/summary/current-month');
-      final total = _toDouble(response.data['total']);
+      final response = await dio.get(
+        '/expenses',
+        queryParameters: {
+          'take': take,
+          'skip': skip,
+          if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+          if (category != null && category.trim().isNotEmpty)
+            'category': category.trim(),
+          if (year != null) 'year': year,
+          if (month != null) 'month': month,
+        },
+      );
+      return _decodeExpensePage(response.data);
+    } on DioException catch (error) {
+      if (!isOfflineError(error)) {
+        rethrow;
+      }
+      final canUseRecentCache = skip == 0 &&
+          (search == null || search.trim().isEmpty) &&
+          (category == null || category.trim().isEmpty) &&
+          year == null &&
+          month == null;
+      if (canUseRecentCache) {
+        final cached = await _readExpensesCache(_recentExpensesCacheKey);
+        if (cached.isNotEmpty) {
+          return ExpenseHistoryPage(
+            items: cached.take(take).toList(),
+            total: cached.length,
+            take: take,
+            skip: 0,
+            hasMore: cached.length > take,
+            nextSkip: cached.length > take ? take : null,
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<ExpenseMonthSummary> getMonthSummary({
+    int? year,
+    int? month,
+  }) async {
+    try {
+      await _syncPendingActions();
+      final response = await dio.get(
+        '/expenses/summary/monthly',
+        queryParameters: {
+          if (year != null) 'year': year,
+          if (month != null) 'month': month,
+        },
+      );
+      final summary = _decodeMonthSummary(response.data);
       await offlineStore.writeJson(_monthSummaryCacheKey, {
-        'total': total,
+        'year': summary.year,
+        'month': summary.month,
+        'total': summary.total,
+        'transactionCount': summary.transactionCount,
+        'topCategory': summary.topCategory,
+        'byCategory': summary.byCategory
+            .map((item) => {
+                  'category': item.category,
+                  'total': item.total,
+                })
+            .toList(),
         'savedAt': DateTime.now().toIso8601String(),
       });
-      return total;
+      return summary;
     } on DioException catch (error) {
       if (!isOfflineError(error)) {
         rethrow;
       }
       final cached = await offlineStore.readJsonMap(_monthSummaryCacheKey);
-      final total = _toDouble(cached?['total']);
       if (cached != null) {
-        return total;
+        return _decodeMonthSummary(cached);
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<ExpenseYearAnalytics> getYearAnalytics({
+    int? year,
+  }) async {
+    await _syncPendingActions();
+    final response = await dio.get(
+      '/expenses/analytics/yearly',
+      queryParameters: {
+        if (year != null) 'year': year,
+      },
+    );
+    return _decodeYearAnalytics(response.data);
   }
 
   @override
@@ -395,7 +487,7 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
       } else {
         await _writePendingActions(remaining);
       }
-    } on DioException catch (error) {
+    } on DioException {
       if (remaining.isEmpty) {
         await offlineStore.remove(_pendingActionsKey);
       } else {
@@ -516,6 +608,69 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
     return items
         .map((item) => ExpenseModel.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  ExpenseHistoryPage _decodeExpensePage(dynamic data) {
+    final json = data as Map<String, dynamic>;
+    return ExpenseHistoryPage(
+      items: _decodeExpenses(json['items']),
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      take: (json['take'] as num?)?.toInt() ?? 20,
+      skip: (json['skip'] as num?)?.toInt() ?? 0,
+      hasMore: json['hasMore'] as bool? ?? false,
+      nextSkip: (json['nextSkip'] as num?)?.toInt(),
+    );
+  }
+
+  ExpenseMonthSummary _decodeMonthSummary(dynamic data) {
+    final json = data as Map<String, dynamic>;
+    final categoryItems = (json['byCategory'] as List<dynamic>? ?? [])
+        .map(
+          (item) => ExpenseCategoryTotal(
+            category: item['category'] as String,
+            total: _toDouble(item['total']),
+          ),
+        )
+        .toList();
+
+    final now = DateTime.now();
+    return ExpenseMonthSummary(
+      year: (json['year'] as num?)?.toInt() ?? now.year,
+      month: (json['month'] as num?)?.toInt() ?? now.month,
+      total: _toDouble(json['total']),
+      transactionCount: (json['transactionCount'] as num?)?.toInt() ?? 0,
+      topCategory: json['topCategory'] as String?,
+      byCategory: categoryItems,
+    );
+  }
+
+  ExpenseYearAnalytics _decodeYearAnalytics(dynamic data) {
+    final json = data as Map<String, dynamic>;
+    final monthlyItems = (json['byMonth'] as List<dynamic>? ?? [])
+        .map(
+          (item) => ExpenseMonthPoint(
+            month: (item['month'] as num?)?.toInt() ?? 0,
+            label: item['label'] as String? ?? '',
+            total: _toDouble(item['total']),
+          ),
+        )
+        .toList();
+    final categoryItems = (json['byCategory'] as List<dynamic>? ?? [])
+        .map(
+          (item) => ExpenseCategoryTotal(
+            category: item['category'] as String,
+            total: _toDouble(item['total']),
+          ),
+        )
+        .toList();
+    return ExpenseYearAnalytics(
+      year: (json['year'] as num?)?.toInt() ?? DateTime.now().year,
+      total: _toDouble(json['total']),
+      averageMonthly: _toDouble(json['averageMonthly']),
+      topCategory: json['topCategory'] as String?,
+      byMonth: monthlyItems,
+      byCategory: categoryItems,
+    );
   }
 
   Map<String, dynamic> _buildPayload({

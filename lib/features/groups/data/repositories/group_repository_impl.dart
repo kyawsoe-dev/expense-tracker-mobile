@@ -4,6 +4,7 @@ import '../../../../core/offline/offline_store.dart';
 import '../../../../core/offline/offline_utils.dart';
 import '../../domain/entities/expense_group.dart';
 import '../../domain/entities/group_member.dart';
+import '../../domain/entities/group_member_suggestion.dart';
 import '../../domain/repositories/group_repository.dart';
 import '../models/expense_group_model.dart';
 
@@ -141,6 +142,38 @@ class GroupRepositoryImpl implements GroupRepository {
 
       return _queueAddedMember(groupId, normalizedEmail);
     }
+  }
+
+  @override
+  Future<List<GroupMemberSuggestion>> searchMemberSuggestions(
+    String query, {
+    String? groupId,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+
+    final response = await dio.get(
+      '/groups/member-suggestions',
+      queryParameters: {
+        'query': normalizedQuery,
+        if (groupId != null && !isLocalOnlyId(groupId)) 'groupId': groupId,
+      },
+    );
+
+    final items = response.data as List<dynamic>;
+    return items
+        .map(
+          (item) => GroupMemberSuggestion(
+            id: item['id'] as String,
+            email: item['email'] as String,
+            name: (item['name'] as String?)?.trim().isNotEmpty == true
+                ? item['name'] as String
+                : _displayNameFromEmail(item['email'] as String),
+          ),
+        )
+        .toList();
   }
 
   Future<ExpenseGroupModel> _queueAddedMember(

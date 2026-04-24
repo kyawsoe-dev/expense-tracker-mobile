@@ -19,11 +19,15 @@ class TokenStorage {
   }
 
   Future<void> writeUserProfile({String? email, String? name}) async {
-    if (email != null) {
+    if (email != null && email.trim().isNotEmpty) {
       await _storage.write(key: _userEmailKey, value: email);
+    } else {
+      await _storage.delete(key: _userEmailKey);
     }
-    if (name != null) {
+    if (name != null && name.trim().isNotEmpty) {
       await _storage.write(key: _userNameKey, value: name);
+    } else {
+      await _storage.delete(key: _userNameKey);
     }
   }
 

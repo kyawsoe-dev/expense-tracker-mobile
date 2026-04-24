@@ -8,6 +8,8 @@ import '../../../../core/session/session_user.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/modern_app_bar.dart';
 import '../../domain/entities/expense.dart';
+import '../../domain/entities/expense_month_summary.dart';
+import '../../domain/entities/expense_year_analytics.dart';
 import '../providers/expense_providers.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -25,12 +27,25 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  late DateTime _selectedMonth;
+  late int _selectedAnalyticsYear;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month);
+    _selectedAnalyticsYear = now.year;
+  }
+
   Future<void> _refresh() async {
     ref.invalidate(recentExpensesProvider);
-    ref.invalidate(monthSummaryProvider);
+    ref.invalidate(monthOverviewProvider);
+    ref.invalidate(yearAnalyticsProvider);
     await Future.wait([
       ref.read(recentExpensesProvider.future),
-      ref.read(monthSummaryProvider.future),
+      ref.read(monthOverviewProvider(_selectedMonth).future),
+      ref.read(yearAnalyticsProvider(_selectedAnalyticsYear).future),
     ]).timeout(
       const Duration(seconds: 10),
       onTimeout: () => [],
@@ -84,7 +99,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final expensesAsync = ref.watch(recentExpensesProvider);
-    final totalAsync = ref.watch(monthSummaryProvider);
+    final monthSummaryAsync = ref.watch(monthOverviewProvider(_selectedMonth));
+    final yearAnalyticsAsync =
+        ref.watch(yearAnalyticsProvider(_selectedAnalyticsYear));
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -126,13 +143,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onRefresh: _refresh,
         child: expensesAsync.when(
           data: (expenses) {
-            final total = totalAsync.value ?? 0.0;
             return FutureBuilder<SessionUser>(
               future: _loadUser(),
               builder: (context, snapshot) {
                 final user = snapshot.data ?? const SessionUser();
                 final displayName = user.name ?? user.email ?? 'there';
-                final topCategory = _topCategory(expenses);
 
                 return ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -144,41 +159,53 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Track your MMK spending with a cleaner snapshot of this month.',
+                      'Track your MMK spending with a cleaner snapshot of each month and the full year ahead.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 18),
-                    _BalanceCard(
-                      total: total,
-                      expenseCount: expenses.length,
-                      topCategory: topCategory,
+                    monthSummaryAsync.when(
+                      data: (summary) => _BalanceCard(
+                        summary: summary,
+                        selectedMonth: _selectedMonth,
+                        availableMonths: _monthOptions(),
+                        onSelectedMonth: (month) {
+                          setState(() => _selectedMonth = month);
+                        },
+                      ),
+                      loading: () => _BalanceCardSkeleton(
+                        selectedMonth: _selectedMonth,
+                        availableMonths: _monthOptions(),
+                        onSelectedMonth: (month) {
+                          setState(() => _selectedMonth = month);
+                        },
+                      ),
+                      error: (error, _) => _InlineError(
+                        message: _friendlyError(error),
+                        onRetry: _refresh,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     _SyncReadyCard(),
                     const SizedBox(height: 18),
                     _SectionHeader(
                       title: 'Analytics',
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: palette.accentSoft,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          DateFormat('MMM yyyy').format(DateTime.now()),
-                          style: TextStyle(
-                            color: palette.accent,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
+                      trailing: _YearFilterChip(
+                        selectedYear: _selectedAnalyticsYear,
+                        years: _yearOptions(),
+                        onSelected: (year) {
+                          setState(() => _selectedAnalyticsYear = year);
+                        },
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _AnalyticsCard(expenses: expenses),
+                    yearAnalyticsAsync.when(
+                      data: (analytics) => _AnalyticsCard(analytics: analytics),
+                      loading: () => const _AnalyticsLoadingCard(),
+                      error: (error, _) => _InlineError(
+                        message: _friendlyError(error),
+                        onRetry: _refresh,
+                      ),
+                    ),
                     const SizedBox(height: 18),
                     _SectionHeader(
                       title: 'Recent transactions',
@@ -207,9 +234,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               },
             );
           },
-          loading: () => totalAsync.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : const SizedBox.shrink(),
+          loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -224,36 +249,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  String _topCategory(List<Expense> expenses) {
-    if (expenses.isEmpty) {
-      return 'No spending yet';
-    }
-
-    final grouped = <String, double>{};
-    for (final expense in expenses) {
-      grouped.update(
-        expense.category,
-        (value) => value + expense.amount,
-        ifAbsent: () => expense.amount,
-      );
-    }
-
-    final top = grouped.entries.reduce(
-      (current, next) => current.value >= next.value ? current : next,
+  List<DateTime> _monthOptions() {
+    final now = DateTime.now();
+    return List.generate(
+      24,
+      (index) => DateTime(now.year, now.month - index),
     );
-    return top.key;
+  }
+
+  List<int> _yearOptions() {
+    final now = DateTime.now().year;
+    return List.generate(6, (index) => now - index);
   }
 }
 
 class _BalanceCard extends StatelessWidget {
-  final double total;
-  final int expenseCount;
-  final String topCategory;
+  final ExpenseMonthSummary summary;
+  final DateTime selectedMonth;
+  final List<DateTime> availableMonths;
+  final ValueChanged<DateTime> onSelectedMonth;
 
   const _BalanceCard({
-    required this.total,
-    required this.expenseCount,
-    required this.topCategory,
+    required this.summary,
+    required this.selectedMonth,
+    required this.availableMonths,
+    required this.onSelectedMonth,
   });
 
   @override
@@ -296,12 +316,16 @@ class _BalanceCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.insights_rounded, color: Colors.white70),
+              _MonthFilterChip(
+                selectedMonth: selectedMonth,
+                months: availableMonths,
+                onSelected: onSelectedMonth,
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
-            amount.format(total),
+            amount.format(summary.total),
             style: Theme.of(context)
                 .textTheme
                 .headlineMedium
@@ -309,7 +333,7 @@ class _BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Your current month total across all tracked expenses.',
+            'Your selected month total across all tracked expenses.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.74),
                 ),
@@ -320,20 +344,49 @@ class _BalanceCard extends StatelessWidget {
               Expanded(
                 child: _BalanceMeta(
                   label: 'Transactions',
-                  value: '$expenseCount',
+                  value: '${summary.transactionCount}',
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _BalanceMeta(
                   label: 'Top category',
-                  value: topCategory,
+                  value: summary.topCategory ?? 'No spending yet',
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BalanceCardSkeleton extends StatelessWidget {
+  final DateTime selectedMonth;
+  final List<DateTime> availableMonths;
+  final ValueChanged<DateTime> onSelectedMonth;
+
+  const _BalanceCardSkeleton({
+    required this.selectedMonth,
+    required this.availableMonths,
+    required this.onSelectedMonth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _BalanceCard(
+      summary: ExpenseMonthSummary(
+        year: selectedMonth.year,
+        month: selectedMonth.month,
+        total: 0,
+        transactionCount: 0,
+        topCategory: null,
+        byCategory: const [],
+      ),
+      selectedMonth: selectedMonth,
+      availableMonths: availableMonths,
+      onSelectedMonth: onSelectedMonth,
     );
   }
 }
@@ -430,22 +483,15 @@ class _BalanceMeta extends StatelessWidget {
 }
 
 class _AnalyticsCard extends StatelessWidget {
-  final List<Expense> expenses;
+  final ExpenseYearAnalytics analytics;
 
-  const _AnalyticsCard({required this.expenses});
+  const _AnalyticsCard({required this.analytics});
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final grouped = <String, double>{};
-    for (final expense in expenses.take(6).toList().reversed) {
-      final key = DateFormat('MMM').format(expense.date.toLocal());
-      grouped.update(key, (value) => value + expense.amount,
-          ifAbsent: () => expense.amount);
-    }
-
-    final labels = grouped.keys.toList();
-    final values = grouped.values.toList();
+    final labels = analytics.byMonth.map((item) => item.label).toList();
+    final values = analytics.byMonth.map((item) => item.total).toList();
     final maxValue =
         values.isEmpty ? 1.0 : values.reduce((a, b) => a > b ? a : b);
     final amount =
@@ -454,101 +500,301 @@ class _AnalyticsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       decoration: context.appCardDecoration(),
-      child: SizedBox(
-        height: 230,
-        child: BarChart(
-          BarChartData(
-            alignment: BarChartAlignment.spaceAround,
-            maxY: maxValue == 0 ? 1 : maxValue * 1.25,
-            borderData: FlBorderData(show: false),
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: maxValue == 0 ? 1 : maxValue / 4,
-              getDrawingHorizontalLine: (_) => FlLine(
-                color: palette.border,
-                strokeWidth: 1,
-              ),
-            ),
-            titlesData: FlTitlesData(
-              topTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              rightTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 42,
-                  getTitlesWidget: (value, meta) => Text(
-                    amount.format(value),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: palette.textMuted,
-                    ),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _AnalyticsMeta(
+                  label: 'Year total',
+                  value: amount.format(analytics.total),
                 ),
               ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    final index = value.toInt();
-                    if (index < 0 || index >= labels.length) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        labels[index],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _AnalyticsMeta(
+                  label: 'Top category',
+                  value: analytics.topCategory ?? 'No data yet',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 230,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxValue == 0 ? 1 : maxValue * 1.25,
+                borderData: FlBorderData(show: false),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxValue == 0 ? 1 : maxValue / 4,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: palette.border,
+                    strokeWidth: 1,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 42,
+                      getTitlesWidget: (value, meta) => Text(
+                        amount.format(value),
                         style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: palette.textSecondary,
+                          fontSize: 10,
+                          color: palette.textMuted,
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            barTouchData: BarTouchData(
-              touchTooltipData: BarTouchTooltipData(
-                getTooltipColor: (_) => palette.textPrimary,
-                getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                  final label = groupIndex >= 0 && groupIndex < labels.length
-                      ? labels[groupIndex]
-                      : '';
-                  return BarTooltipItem(
-                    '$label\n${amount.format(rod.toY)}',
-                    const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w700),
-                  );
-                },
-              ),
-            ),
-            barGroups: List.generate(values.length, (index) {
-              final isPeak = values[index] == maxValue;
-              return BarChartGroupData(
-                x: index,
-                barRods: [
-                  BarChartRodData(
-                    toY: values[index],
-                    width: 18,
-                    borderRadius: BorderRadius.circular(8),
-                    gradient: LinearGradient(
-                      colors: isPeak
-                          ? [palette.primary, palette.primaryDark]
-                          : [palette.accentStart, palette.accent],
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
                     ),
                   ),
-                ],
-              );
-            }),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= labels.length) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            labels[index],
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) => palette.textPrimary,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final label = groupIndex >= 0 && groupIndex < labels.length
+                          ? labels[groupIndex]
+                          : '';
+                      return BarTooltipItem(
+                        '$label\n${amount.format(rod.toY)}',
+                        const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w700),
+                      );
+                    },
+                  ),
+                ),
+                barGroups: List.generate(values.length, (index) {
+                  final isPeak = values[index] == maxValue;
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: values[index],
+                        width: 18,
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(
+                          colors: isPeak
+                              ? [palette.primary, palette.primaryDark]
+                              : [palette.accentStart, palette.accent],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnalyticsLoadingCard extends StatelessWidget {
+  const _AnalyticsLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _AnalyticsCard(
+      analytics: ExpenseYearAnalytics(
+        year: 0,
+        total: 0,
+        averageMonthly: 0,
+        topCategory: null,
+        byMonth: [
+          ExpenseMonthPoint(month: 1, label: 'Jan', total: 0),
+          ExpenseMonthPoint(month: 2, label: 'Feb', total: 0),
+          ExpenseMonthPoint(month: 3, label: 'Mar', total: 0),
+          ExpenseMonthPoint(month: 4, label: 'Apr', total: 0),
+          ExpenseMonthPoint(month: 5, label: 'May', total: 0),
+          ExpenseMonthPoint(month: 6, label: 'Jun', total: 0),
+          ExpenseMonthPoint(month: 7, label: 'Jul', total: 0),
+          ExpenseMonthPoint(month: 8, label: 'Aug', total: 0),
+          ExpenseMonthPoint(month: 9, label: 'Sep', total: 0),
+          ExpenseMonthPoint(month: 10, label: 'Oct', total: 0),
+          ExpenseMonthPoint(month: 11, label: 'Nov', total: 0),
+          ExpenseMonthPoint(month: 12, label: 'Dec', total: 0),
+        ],
+        byCategory: [],
+      ),
+    );
+  }
+}
+
+class _AnalyticsMeta extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _AnalyticsMeta({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: palette.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthFilterChip extends StatelessWidget {
+  final DateTime selectedMonth;
+  final List<DateTime> months;
+  final ValueChanged<DateTime> onSelected;
+
+  const _MonthFilterChip({
+    required this.selectedMonth,
+    required this.months,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<DateTime>(
+      initialValue: selectedMonth,
+      onSelected: onSelected,
+      itemBuilder: (context) => months
+          .map(
+            (month) => PopupMenuItem<DateTime>(
+              value: month,
+              child: Text(DateFormat('MMM yyyy').format(month)),
+            ),
+          )
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              DateFormat('MMM yyyy').format(selectedMonth),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.expand_more_rounded, color: Colors.white, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _YearFilterChip extends StatelessWidget {
+  final int selectedYear;
+  final List<int> years;
+  final ValueChanged<int> onSelected;
+
+  const _YearFilterChip({
+    required this.selectedYear,
+    required this.years,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return PopupMenuButton<int>(
+      initialValue: selectedYear,
+      onSelected: onSelected,
+      itemBuilder: (context) => years
+          .map(
+            (year) => PopupMenuItem<int>(
+              value: year,
+              child: Text('$year'),
+            ),
+          )
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: palette.accentSoft,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$selectedYear',
+              style: TextStyle(
+                color: palette.accent,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.expand_more_rounded, color: palette.accent, size: 16),
+          ],
         ),
       ),
     );
