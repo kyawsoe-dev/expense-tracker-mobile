@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/ai/ai_providers.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/modern_app_bar.dart';
 import '../../../groups/presentation/providers/group_providers.dart';
@@ -28,6 +29,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
   String? _selectedGroupId;
+  String? _aiSuggestion;
+  bool _isFetchingSuggestion = false;
 
   bool get _isEditMode => widget.initialExpense != null;
 
@@ -63,6 +66,39 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _fetchAiSuggestion() async {
+    final title = _titleCtrl.text.trim();
+    if (title.length < 3) return;
+
+    setState(() => _isFetchingSuggestion = true);
+    try {
+      final aiService = ref.read(aiServiceProvider);
+      final suggestion = await aiService.suggestCategory(title);
+      debugPrint('AI suggestion: $suggestion');
+      if (mounted && suggestion.isNotEmpty && suggestion != 'Other') {
+        setState(() {
+          _aiSuggestion = suggestion;
+          if (_categoryCtrl.text.trim().isEmpty) {
+            _categoryCtrl.text = suggestion;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('AI suggestion error: $e');
+    } finally {
+      if (mounted) setState(() => _isFetchingSuggestion = false);
+    }
+  }
+
+  void _applySuggestion() {
+    if (_aiSuggestion != null && _aiSuggestion!.isNotEmpty) {
+      setState(() {
+        _categoryCtrl.text = _aiSuggestion!;
+        _aiSuggestion = null;
+      });
     }
   }
 
@@ -180,7 +216,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Keep category, amount, and date clear so analytics stay accurate. If you are offline, new entries can sync later.',
+                            'Keep category, amount, and date clear so analytics stay accurate.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
@@ -207,6 +243,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         hintText: 'Lunch, taxi, groceries...',
                         prefixIcon: Icon(Icons.title_rounded),
                       ),
+                      onChanged: (value) {},
                       validator: (value) =>
                           (value == null || value.trim().isEmpty)
                               ? 'Enter a title'
@@ -236,29 +273,38 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _categoryCtrl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Category',
                         hintText: 'Food, transport, shopping...',
-                        prefixIcon: Icon(Icons.category_rounded),
+                        prefixIcon: const Icon(Icons.category_rounded),
+                        suffixIcon: _isFetchingSuggestion
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : _aiSuggestion != null
+                                ? IconButton(
+                                    icon: const Icon(Icons.auto_awesome),
+                                    tooltip:
+                                        'Apply AI suggestion: $_aiSuggestion',
+                                    onPressed: _applySuggestion,
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.lightbulb_outline),
+                                    tooltip: 'Get AI suggestion',
+                                    onPressed: _fetchAiSuggestion,
+                                  ),
                       ),
                       validator: (value) =>
                           (value == null || value.trim().isEmpty)
                               ? 'Enter a category'
                               : null,
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: palette.surfaceSoft,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: palette.border),
-                      ),
-                      child: Text(
-                        'Personal and shared expenses stay usable offline with the latest cached data, then sync once the connection comes back.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
                     ),
                     const SizedBox(height: 12),
                     groupsAsync.when(

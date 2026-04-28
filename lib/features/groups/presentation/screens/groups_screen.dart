@@ -38,7 +38,7 @@ class GroupsScreen extends ConsumerWidget {
                   child: FilledButton.icon(
                     onPressed: () => _showCreateGroupDialog(context, ref),
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('New group'),
+                    label: const Text('New'),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -104,7 +104,7 @@ class GroupsScreen extends ConsumerWidget {
           ? FloatingActionButton.extended(
               onPressed: () => _showCreateGroupDialog(context, ref),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('New group'),
+              label: const Text('New'),
             )
           : null,
     );
@@ -114,8 +114,8 @@ class GroupsScreen extends ConsumerWidget {
       BuildContext context, WidgetRef ref) async {
     try {
       final result = await showDialog<_CreateGroupDialogResult>(
-      context: context,
-      builder: (_) => const _CreateGroupDialog(),
+        context: context,
+        builder: (_) => const _CreateGroupDialog(),
       );
 
       if (result == null) {
@@ -255,78 +255,133 @@ class _CreateGroupDialogState extends ConsumerState<_CreateGroupDialog> {
   void _removeMemberSuggestion(GroupMemberSuggestion member) {
     setState(() {
       _selectedMembers = _selectedMembers
-          .where((item) => item.email.toLowerCase() != member.email.toLowerCase())
+          .where(
+              (item) => item.email.toLowerCase() != member.email.toLowerCase())
           .toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return AlertDialog(
-      title: const Text('Create group'),
-      content: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 420,
-          maxHeight: MediaQuery.of(context).size.height * 0.6,
-        ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Create group'),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: Icon(Icons.close_rounded, color: palette.textMuted),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            iconSize: 22,
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: context.palette.surfaceSoft,
+                  color: palette.surfaceSoft,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(
-                  'Good for couples, friends, trips, family budgets, and shared project spending.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: palette.primary, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Good for couples, friends, trips, family budgets, and shared project spending.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                 controller: _nameController,
                 autofocus: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Group name',
                   hintText: 'Home, Couple Budget, Trip...',
+                  prefixIcon:
+                      Icon(Icons.group_outlined, color: palette.textMuted),
+                  filled: true,
+                  fillColor: palette.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: palette.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: palette.primary, width: 2),
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                 controller: _inviteController,
                 onChanged: _onInviteChanged,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Invite members (optional)',
                   hintText: 'Type member email',
+                  prefixIcon:
+                      Icon(Icons.person_add_outlined, color: palette.textMuted),
+                  filled: true,
+                  fillColor: palette.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: palette.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: palette.primary, width: 2),
+                  ),
                 ),
               ),
               if (_selectedMembers.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _selectedMembers
-                        .map(
-                          (member) => InputChip(
-                            label: Text(member.email),
-                            avatar: CircleAvatar(
-                              child: Text(
-                                member.name.isEmpty
-                                    ? member.email.substring(0, 1).toUpperCase()
-                                    : member.name.substring(0, 1).toUpperCase(),
-                              ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedMembers
+                      .map(
+                        (member) => Chip(
+                          label: Text(member.email),
+                          avatar: CircleAvatar(
+                            backgroundColor: palette.primary,
+                            radius: 12,
+                            child: Text(
+                              member.name.isEmpty
+                                  ? member.email.substring(0, 1).toUpperCase()
+                                  : member.name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 10),
                             ),
-                            onDeleted: () => _removeMemberSuggestion(member),
                           ),
-                        )
-                        .toList(),
-                  ),
+                          deleteIcon: const Icon(Icons.close, size: 16),
+                          onDeleted: () => _removeMemberSuggestion(member),
+                        ),
+                      )
+                      .toList(),
                 ),
               ],
               if (_isSearching) ...[
@@ -336,21 +391,49 @@ class _CreateGroupDialogState extends ConsumerState<_CreateGroupDialog> {
                 const SizedBox(height: 12),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 160),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (var index = 0; index < _suggestions.length; index++) ...[
-                          if (index > 0) const Divider(height: 1),
-                          ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(_suggestions[index].name),
-                            subtitle: Text(_suggestions[index].email),
-                            onTap: () => _addMemberSuggestion(_suggestions[index]),
-                          ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: palette.surfaceSoft,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var index = 0;
+                              index < _suggestions.length;
+                              index++) ...[
+                            if (index > 0)
+                              Divider(height: 1, color: palette.border),
+                            ListTile(
+                              dense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              leading: CircleAvatar(
+                                backgroundColor: palette.primary,
+                                radius: 14,
+                                child: Text(
+                                  _suggestions[index].name.isEmpty
+                                      ? _suggestions[index]
+                                          .email
+                                          .substring(0, 1)
+                                          .toUpperCase()
+                                      : _suggestions[index]
+                                          .name
+                                          .substring(0, 1)
+                                          .toUpperCase(),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 10),
+                                ),
+                              ),
+                              title: Text(_suggestions[index].name),
+                              subtitle: Text(_suggestions[index].email),
+                              onTap: () =>
+                                  _addMemberSuggestion(_suggestions[index]),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -360,10 +443,6 @@ class _CreateGroupDialogState extends ConsumerState<_CreateGroupDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
         FilledButton(
           onPressed: () {
             final name = _nameController.text.trim();

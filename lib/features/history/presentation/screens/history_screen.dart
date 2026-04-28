@@ -37,7 +37,33 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
-    _loadInitial();
+    _loadInitialCacheFirst();
+  }
+
+  Future<void> _loadInitialCacheFirst() async {
+    try {
+      final page = await ref.read(expenseRepositoryProvider).getExpenseHistory(
+            take: _pageSize,
+            skip: 0,
+            search: _searchController.text,
+            category: _selectedCategory == 'All' ? null : _selectedCategory,
+            forceUpdate: false,
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _expenses = page.items;
+        _total = page.total;
+        _hasMore = page.hasMore;
+        _isInitialLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      await _loadInitial();
+    }
   }
 
   @override
@@ -76,8 +102,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 
   Future<void> _loadInitial() async {
+    final existingExpenses = _expenses;
     setState(() {
-      _isInitialLoading = true;
+      _isInitialLoading = existingExpenses.isEmpty;
       _errorMessage = null;
       _hasMore = true;
     });
@@ -88,6 +115,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             skip: 0,
             search: _searchController.text,
             category: _selectedCategory == 'All' ? null : _selectedCategory,
+            forceUpdate: true,
           );
       if (!mounted) {
         return;
@@ -100,6 +128,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       });
     } catch (error) {
       if (!mounted) {
+        return;
+      }
+      if (existingExpenses.isNotEmpty) {
+        setState(() => _isInitialLoading = false);
         return;
       }
       setState(() {
@@ -238,11 +270,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               expenses: _expenses,
               selectedCategory: _selectedCategory,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Search records',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
             const SizedBox(height: 10),
             TextField(
               controller: _searchController,
@@ -250,6 +277,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               decoration: InputDecoration(
                 hintText: 'Search title, note, category, or group',
                 prefixIcon: const Icon(Icons.search_rounded),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 filled: true,
                 fillColor: palette.surface,
                 border: OutlineInputBorder(

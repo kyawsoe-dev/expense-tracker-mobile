@@ -68,22 +68,37 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<void> _confirmAndSignOut() async {
     final shouldSignOut = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text(
-          'You will need to sign in again to access your expenses and groups on this device.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+      builder: (context) {
+        final palette =
+            Theme.of(context).extension<AppPalette>() ?? AppPalette.light;
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Sign out?'),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                icon: Icon(Icons.close_rounded, color: palette.textMuted),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                iconSize: 22,
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sign out'),
+          content: const Text(
+            'You will need to sign in again to access your expenses and groups on this device.',
           ),
-        ],
-      ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sign out'),
+            ),
+          ],
+        );
+      },
     );
 
     if (shouldSignOut == true) {

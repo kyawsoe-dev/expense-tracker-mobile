@@ -20,7 +20,7 @@ class GroupRepositoryImpl implements GroupRepository {
   GroupRepositoryImpl(this.dio, this.offlineStore);
 
   @override
-  Future<void> createGroup(
+  Future<ExpenseGroupModel> createGroup(
     String name, {
     List<String> memberEmails = const [],
   }) async {
@@ -30,7 +30,13 @@ class GroupRepositoryImpl implements GroupRepository {
     };
 
     try {
-      await dio.post('/groups', data: payload);
+      final response = await dio.post('/groups', data: payload);
+      final created = ExpenseGroupModel.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+      await _upsertGroup(created);
+      await _writeGroupDetail(created);
+      return created;
     } on DioException catch (error) {
       if (!isOfflineError(error)) {
         rethrow;
@@ -63,7 +69,7 @@ class GroupRepositoryImpl implements GroupRepository {
       await _writePendingActions(pending);
       await _upsertGroup(localGroup);
       await _writeGroupDetail(localGroup);
-      return;
+      return localGroup;
     }
   }
 
@@ -141,6 +147,59 @@ class GroupRepositoryImpl implements GroupRepository {
       }
 
       return _queueAddedMember(groupId, normalizedEmail);
+    }
+  }
+
+  @override
+  Future<ExpenseGroup> renameGroup(String groupId, String newName) async {
+    final trimmedName = newName.trim();
+
+    if (isLocalOnlyId(groupId)) {
+      return _queueRenameGroup(groupId, trimmedName);
+    }
+
+    try {
+      final response = await dio.patch(
+        '/groups/$groupId',
+        data: {'name': trimmedName},
+      );
+      final group = ExpenseGroupModel.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+      await _writeGroupDetail(group);
+      await _upsertGroup(group);
+      return group;
+    } on DioException catch (error) {
+      if (!isOfflineError(error)) {
+        rethrow;
+      }
+
+      return _queueRenameGroup(groupId, trimmedName);
+    }
+  }
+
+  @override
+  Future<ExpenseGroup> removeMember(String groupId, String memberId) async {
+    if (isLocalOnlyId(groupId)) {
+      return _queueRemoveMember(groupId, memberId);
+    }
+
+    try {
+      final response = await dio.delete(
+        '/groups/$groupId/members/$memberId',
+      );
+      final group = ExpenseGroupModel.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+      await _writeGroupDetail(group);
+      await _upsertGroup(group);
+      return group;
+    } on DioException catch (error) {
+      if (!isOfflineError(error)) {
+        rethrow;
+      }
+
+      return _queueRemoveMember(groupId, memberId);
     }
   }
 
@@ -239,6 +298,99 @@ class GroupRepositoryImpl implements GroupRepository {
     return updated;
   }
 
+  Future<ExpenseGroupModel> _queueRenameGroup(
+    String groupId,
+    String newName,
+  ) async {
+    final pending = await _readPendingActions();
+    final pendingCreateIndex = pending.indexWhere(
+      (item) => item['type'] == 'create' && item['id'] == groupId,
+    );
+
+    if (pendingCreateIndex >= 0) {
+      final createAction = pending[pendingCreateIndex];
+      final payload = Map<String, dynamic>.from(
+        createAction['payload'] as Map<String, dynamic>? ?? const {},
+      );
+
+      pending[pendingCreateIndex] = {
+        ...createAction,
+        'payload': {
+          ...payload,
+          'name': newName,
+        },
+      };
+    } else {
+      pending.add({
+        'type': 'rename',
+        'groupId': groupId,
+        'payload': {'name': newName},
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
+
+    await _writePendingActions(pending);
+
+    final detailMap = await offlineStore.readJsonMap(_groupDetailKey(groupId));
+    final updated = detailMap != null
+        ? ExpenseGroupModel(
+            id: groupId,
+            name: newName,
+            createdAt: ExpenseGroupModel.fromJson(detailMap).createdAt,
+            members: ExpenseGroupModel.fromJson(detailMap).members,
+            balances: ExpenseGroupModel.fromJson(detailMap).balances,
+          )
+        : ExpenseGroupModel(
+            id: groupId,
+            name: newName,
+            createdAt: DateTime.now(),
+          );
+
+    await _writeGroupDetail(updated);
+    await _upsertGroup(updated);
+    return updated;
+  }
+
+  Future<ExpenseGroupModel> _queueRemoveMember(
+    String groupId,
+    String memberId,
+  ) async {
+    final pending = await _readPendingActions();
+    pending.add({
+      'type': 'remove_member',
+      'groupId': groupId,
+      'memberId': memberId,
+      'payload': {},
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+
+    await _writePendingActions(pending);
+
+    final detailMap = await offlineStore.readJsonMap(_groupDetailKey(groupId));
+    if (detailMap == null) {
+      return ExpenseGroupModel(
+        id: groupId,
+        name: 'Shared group',
+        createdAt: DateTime.now(),
+      );
+    }
+
+    final currentGroup = ExpenseGroupModel.fromJson(detailMap);
+    final updated = ExpenseGroupModel(
+      id: groupId,
+      name: currentGroup.name,
+      createdAt: currentGroup.createdAt,
+      balances: currentGroup.balances,
+      members: currentGroup.members
+          .where((member) => member.id != memberId)
+          .toList(),
+    );
+
+    await _writeGroupDetail(updated);
+    await _upsertGroup(updated);
+    return updated;
+  }
+
   Future<void> _syncPendingActions() async {
     if (_isSyncing) {
       return;
@@ -258,6 +410,7 @@ class GroupRepositoryImpl implements GroupRepository {
         final type = action['type'] as String?;
         final id = action['id'] as String?;
         final groupId = action['groupId'] as String?;
+        final memberId = action['memberId'] as String?;
         final payload = action['payload'] as Map<String, dynamic>?;
 
         if (type == 'create' && id != null && payload != null) {
@@ -273,6 +426,27 @@ class GroupRepositoryImpl implements GroupRepository {
         if (type == 'add_member' && groupId != null && payload != null) {
           final resolvedGroupId = tempIdMap[groupId] ?? groupId;
           await dio.post('/groups/$resolvedGroupId/members', data: payload);
+          remaining.remove(action);
+          continue;
+        }
+
+        if (type == 'rename' && groupId != null && payload != null) {
+          final resolvedGroupId = tempIdMap[groupId] ?? groupId;
+          await dio.patch(
+            '/groups/$resolvedGroupId',
+            data: payload,
+          );
+          remaining.remove(action);
+          continue;
+        }
+
+        if (type == 'remove_member' &&
+            groupId != null &&
+            memberId != null) {
+          final resolvedGroupId = tempIdMap[groupId] ?? groupId;
+          await dio.delete(
+            '/groups/$resolvedGroupId/members/$memberId',
+          );
           remaining.remove(action);
         }
       }

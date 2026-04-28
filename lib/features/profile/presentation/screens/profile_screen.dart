@@ -125,57 +125,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                     ),
                     const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final statusText = Text(
-                            'Signed in and ready to manage expenses',
-                            textAlign: TextAlign.center,
-                            softWrap: true,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                          );
-
-                          if (constraints.maxWidth < 320) {
-                            return Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.verified_user_rounded,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                                const SizedBox(height: 8),
-                                statusText,
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.verified_user_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(child: statusText),
-                            ],
-                          );
-                        },
-                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Signed in and ready to manage expenses',
+                          textAlign: TextAlign.center,
+                          softWrap: true,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildThemeButtonsRow(themeMode, ref),
+                      ],
                     ),
                   ],
                 ),
@@ -349,75 +314,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Appearance',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Choose how the app should look on this device.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 14),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final segmentedButton = SegmentedButton<ThemeMode>(
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment<ThemeMode>(
-                              value: ThemeMode.light,
-                              icon: Icon(Icons.light_mode_rounded),
-                              label: Text('Light'),
-                            ),
-                            ButtonSegment<ThemeMode>(
-                              value: ThemeMode.dark,
-                              icon: Icon(Icons.dark_mode_rounded),
-                              label: Text('Dark'),
-                            ),
-                            ButtonSegment<ThemeMode>(
-                              value: ThemeMode.system,
-                              icon: Icon(Icons.brightness_auto_rounded),
-                              label: Text('System'),
-                            ),
-                          ],
-                          selected: {themeMode},
-                          onSelectionChanged: (selection) {
-                            final mode = selection.first;
-                            ref
-                                .read(themeModeProvider.notifier)
-                                .setThemeMode(mode);
-                          },
-                        );
-
-                        if (constraints.maxWidth < 360) {
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: segmentedButton,
-                          );
-                        }
-
-                        return SizedBox(
-                          width: double.infinity,
-                          child: segmentedButton,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: cardDecoration(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
                       'Account actions',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Use the button below to securely sign out of this device.',
+                      'Use this button to securely sign out of this device.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 18),
@@ -439,6 +341,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Widget _buildThemeButtonsRow(ThemeMode themeMode, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ThemeButton(
+            label: 'Light',
+            mode: ThemeMode.light,
+            currentMode: themeMode,
+            onChanged: (mode) =>
+                ref.read(themeModeProvider.notifier).setThemeMode(mode),
+          ),
+          _ThemeButton(
+            label: 'Dark',
+            mode: ThemeMode.dark,
+            currentMode: themeMode,
+            onChanged: (mode) =>
+                ref.read(themeModeProvider.notifier).setThemeMode(mode),
+          ),
+          _ThemeButton(
+            label: 'System',
+            mode: ThemeMode.system,
+            currentMode: themeMode,
+            onChanged: (mode) =>
+                ref.read(themeModeProvider.notifier).setThemeMode(mode),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showCreateGroupDialog(
       BuildContext context, WidgetRef ref, AppPalette palette) async {
     final result = await showDialog<_ProfileCreateGroupDialogResult>(
@@ -454,6 +388,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           result.name,
           memberEmails: result.memberEmails,
         );
+    // Force refresh the groups list
     ref.invalidate(groupsProvider);
 
     if (!context.mounted) {
@@ -603,8 +538,24 @@ class _ProfileCreateGroupDialogState
 
   @override
   Widget build(BuildContext context) {
+    final palette =
+        Theme.of(context).extension<AppPalette>() ?? AppPalette.light;
     return AlertDialog(
-      title: const Text('Create group'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Create group'),
+          IconButton(
+            onPressed: _closeDialog,
+            icon: Icon(Icons.close_rounded, color: palette.textMuted),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            iconSize: 22,
+          ),
+        ],
+      ),
       content: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 420,
@@ -704,10 +655,6 @@ class _ProfileCreateGroupDialogState
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _closeDialog,
-          child: const Text('Cancel'),
-        ),
         FilledButton(
           onPressed: () {
             final name = _nameController.text.trim();
@@ -731,6 +678,43 @@ class _ProfileCreateGroupDialogState
           child: const Text('Create'),
         ),
       ],
+    );
+  }
+}
+
+class _ThemeButton extends StatelessWidget {
+  final String label;
+  final ThemeMode mode;
+  final ThemeMode currentMode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  const _ThemeButton({
+    required this.label,
+    required this.mode,
+    required this.currentMode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = mode == currentMode;
+    return GestureDetector(
+      onTap: () => onChanged(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.black87 : Colors.white,
+          ),
+        ),
+      ),
     );
   }
 }

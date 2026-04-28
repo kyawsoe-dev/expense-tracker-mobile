@@ -20,6 +20,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color border;
   final Color heroStart;
   final Color heroEnd;
+  final Color heroCardStart;
+  final Color heroCardEnd;
   final Color accentStart;
 
   const AppPalette({
@@ -40,6 +42,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.border,
     required this.heroStart,
     required this.heroEnd,
+    required this.heroCardStart,
+    required this.heroCardEnd,
     required this.accentStart,
   });
 
@@ -59,8 +63,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
     successSoft: Color(0xFFE8F8F0),
     shadow: Color(0x140E0A1F),
     border: Color(0xFFE6E1F2),
-    heroStart: Color(0xFF231942),
-    heroEnd: Color(0xFF3A2F71),
+    heroStart: Color(0xFF7C5CFA),
+    heroEnd: Color(0xFF5630D4),
+    heroCardStart: Color(0xFF9B8AFA),
+    heroCardEnd: Color(0xFF7C5CFA),
     accentStart: Color(0xFFFF985F),
   );
 
@@ -82,10 +88,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
     border: Color(0xFF342C4A),
     heroStart: Color(0xFF31235F),
     heroEnd: Color(0xFF171226),
+    heroCardStart: Color(0xFF31235F),
+    heroCardEnd: Color(0xFF171226),
     accentStart: Color(0xFFFFB07E),
   );
 
-  @override
+@override
   AppPalette copyWith({
     Color? background,
     Color? surface,
@@ -104,6 +112,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? border,
     Color? heroStart,
     Color? heroEnd,
+    Color? heroCardStart,
+    Color? heroCardEnd,
     Color? accentStart,
   }) {
     return AppPalette(
@@ -124,6 +134,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       border: border ?? this.border,
       heroStart: heroStart ?? this.heroStart,
       heroEnd: heroEnd ?? this.heroEnd,
+      heroCardStart: heroCardStart ?? this.heroCardStart,
+      heroCardEnd: heroCardEnd ?? this.heroCardEnd,
       accentStart: accentStart ?? this.accentStart,
     );
   }
@@ -154,6 +166,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       border: Color.lerp(border, other.border, t)!,
       heroStart: Color.lerp(heroStart, other.heroStart, t)!,
       heroEnd: Color.lerp(heroEnd, other.heroEnd, t)!,
+      heroCardStart: Color.lerp(heroCardStart, other.heroCardStart, t)!,
+      heroCardEnd: Color.lerp(heroCardEnd, other.heroCardEnd, t)!,
       accentStart: Color.lerp(accentStart, other.accentStart, t)!,
     );
   }
@@ -168,11 +182,21 @@ extension AppThemeContext on BuildContext {
     return ext;
   }
 
-  LinearGradient get heroGradient => LinearGradient(
+  LinearGradient get heroGradient {
+    final isDark = Theme.of(this).brightness == Brightness.dark;
+    if (isDark) {
+      return LinearGradient(
         colors: [palette.heroStart, palette.heroEnd],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
+    }
+    return LinearGradient(
+      colors: [palette.heroCardStart, palette.heroCardEnd],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
 
   LinearGradient get primaryGradient => LinearGradient(
         colors: [palette.primary, palette.primaryDark],

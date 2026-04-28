@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/session/current_user_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/modern_app_bar.dart';
 import '../../../expenses/domain/entities/expense.dart';
@@ -29,12 +30,28 @@ class GroupDetailScreen extends ConsumerWidget {
     final expensesAsync = ref.watch(groupExpensesProvider(group.id));
     final amount = NumberFormat.currency(symbol: 'MMK ', decimalDigits: 0);
     final relation = describeGroupRelationship(group);
+    final currentUserAsync = ref.watch(currentUserProvider);
+
+    // Compute isOwner for the app bar
+    final detailData = detailAsync.asData?.value;
+    final userData = currentUserAsync.asData?.value;
+    final isOwner = (detailData != null && userData != null)
+        ? detailData.members.any((m) => m.email == userData.email && m.role == 'owner')
+        : false;
 
     return Scaffold(
       backgroundColor: palette.background,
       appBar: ModernAppBar(
         title: group.name,
         subtitle: '${relation.label} collaboration space',
+        actions: [
+          if (isOwner)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _showRenameDialog(context, ref),
+              tooltip: 'Rename group',
+            ),
+        ],
       ),
       body: detailAsync.when(
         data: (detail) => expensesAsync.when(
@@ -65,66 +82,168 @@ class GroupDetailScreen extends ConsumerWidget {
                       label: const Text('Add member'),
                     ),
                   ),
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: detail.members
-                        .map(
-                          (member) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: palette.surfaceSoft,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: palette.border),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  member.name,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: palette.textPrimary,
+                  child: currentUserAsync.when(
+                    data: (user) {
+                      final isOwner = detail.members.any(
+                        (m) => m.email == user.email && m.role == 'owner',
+                      );
+                      return Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: detail.members.map(
+                          (member) {
+                            final isCurrentUserOwner = member.role == 'owner';
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.surfaceSoft,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: palette.border),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          member.name,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                color: palette.textPrimary,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          member.email,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: palette.accentSoft,
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            member.role == 'owner'
+                                                ? 'Owner'
+                                                : 'Member',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: palette.accent,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isOwner && !isCurrentUserOwner)
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.remove_circle_outline,
+                                        color: palette.accent,
+                                        size: 20,
                                       ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  member.email,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: palette.accentSoft,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    member.role == 'owner' ? 'Owner' : 'Member',
+                                      onPressed: () =>
+                                          _confirmRemoveMember(
+                                        context,
+                                        ref,
+                                        member,
+                                      ),
+                                      tooltip: 'Remove member',
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ).toList(),
+                      );
+                    },
+                    loading: () => const LinearProgressIndicator(minHeight: 2),
+                    error: (_, __) => Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: detail.members
+                          .map(
+                            (member) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.surfaceSoft,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: palette.border),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    member.name,
                                     style: Theme.of(context)
                                         .textTheme
-                                        .labelSmall
+                                        .bodyMedium
                                         ?.copyWith(
-                                          color: palette.accent,
                                           fontWeight: FontWeight.w700,
+                                          color: palette.textPrimary,
                                         ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    member.email,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: palette.accentSoft,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      member.role == 'owner'
+                                          ? 'Owner'
+                                          : 'Member',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: palette.accent,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(),
+                          )
+                          .toList(),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -251,6 +370,102 @@ class GroupDetailScreen extends ConsumerWidget {
       );
     }
   }
+
+  Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => _RenameGroupDialog(currentName: group.name),
+    );
+
+    if (newName == null || newName.isEmpty || newName == group.name) {
+      return;
+    }
+
+    try {
+      await ref.read(groupRepositoryProvider).renameGroup(group.id, newName);
+
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Group renamed to "$newName".')),
+      );
+    } on DioException catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+      final serverMessage = e.response?.data is Map<String, dynamic>
+          ? e.response?.data['message'] as String?
+          : null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            serverMessage ?? 'Could not rename group right now.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmRemoveMember(
+    BuildContext context,
+    WidgetRef ref,
+    member,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove member'),
+        content: Text(
+          'Are you sure you want to remove ${member.name} from the group?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ref.read(groupRepositoryProvider).removeMember(group.id, member.id);
+
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${member.name} removed from the group.')),
+      );
+    } on DioException catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+      final serverMessage = e.response?.data is Map<String, dynamic>
+          ? e.response?.data['message'] as String?
+          : null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            serverMessage ?? 'Could not remove member right now.',
+          ),
+        ),
+      );
+    }
+  }
 }
 
 class _AddMemberDialog extends ConsumerStatefulWidget {
@@ -341,57 +556,183 @@ class _AddMemberDialogState extends ConsumerState<_AddMemberDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return AlertDialog(
-      title: const Text('Add member'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          TextField(
-            controller: _controller,
-            onChanged: _onEmailChanged,
-            autofocus: false,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Member email',
-              hintText: 'Type user email',
-            ),
+          const Text('Add member'),
+          IconButton(
+            onPressed: () => _closeDialog(),
+            icon: Icon(Icons.close_rounded, color: palette.textMuted),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            iconSize: 22,
           ),
-          if (_isSearching) ...[
-            const SizedBox(height: 12),
-            const LinearProgressIndicator(minHeight: 2),
-          ] else if (_suggestions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var index = 0; index < _suggestions.length; index++) ...[
-                      if (index > 0) const Divider(height: 1),
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(_suggestions[index].name),
-                        subtitle: Text(_suggestions[index].email),
-                        onTap: () => _selectSuggestion(_suggestions[index]),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => _closeDialog(),
-          child: const Text('Cancel'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _controller,
+                onChanged: _onEmailChanged,
+                autofocus: true,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Member email',
+                  hintText: 'Type user email',
+                  prefixIcon: Icon(Icons.email_outlined, color: palette.textMuted),
+                  filled: true,
+                  fillColor: palette.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: palette.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: palette.primary, width: 2),
+                  ),
+                ),
+              ),
+              if (_isSearching) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(minHeight: 2),
+              ] else if (_suggestions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: palette.surfaceSoft,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var index = 0; index < _suggestions.length; index++) ...[
+                            if (index > 0) Divider(height: 1, color: palette.border),
+                            ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              leading: CircleAvatar(
+                                backgroundColor: palette.primary,
+                                radius: 16,
+                                child: Text(
+                                  _suggestions[index].name.isEmpty
+                                      ? _suggestions[index].email.substring(0, 1).toUpperCase()
+                                      : _suggestions[index].name.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                              title: Text(_suggestions[index].name),
+                              subtitle: Text(_suggestions[index].email),
+                              onTap: () => _selectSuggestion(_suggestions[index]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
+      ),
+      actions: [
         FilledButton(
           onPressed: () => _closeDialog(_controller.text.trim()),
           child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RenameGroupDialog extends StatefulWidget {
+  final String currentName;
+
+  const _RenameGroupDialog({required this.currentName});
+
+  @override
+  State<_RenameGroupDialog> createState() => _RenameGroupDialogState();
+}
+
+class _RenameGroupDialogState extends State<_RenameGroupDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Rename group'),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: Icon(Icons.close_rounded, color: palette.textMuted),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            iconSize: 22,
+          ),
+        ],
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: 'Group name',
+          hintText: 'Enter new group name',
+          prefixIcon: Icon(Icons.group_outlined, color: palette.textMuted),
+          filled: true,
+          fillColor: palette.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: palette.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: palette.primary, width: 2),
+          ),
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () {
+            final name = _controller.text.trim();
+            Navigator.of(context).pop(name);
+          },
+          child: const Text('Rename'),
         ),
       ],
     );

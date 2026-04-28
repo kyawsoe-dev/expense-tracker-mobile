@@ -7,7 +7,8 @@ import 'core/theme/theme_mode_provider.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 import 'features/navigation/presentation/screens/app_shell.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const ProviderScope(child: ExpenseApp()));
 }
 
@@ -51,9 +52,14 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<bool> _loadAuthState() async {
-    final tokenStorage = TokenStorage();
-    final token = await tokenStorage.readAccessToken();
-    return token != null && token.isNotEmpty;
+    try {
+      final tokenStorage = TokenStorage();
+      final token = await tokenStorage.readAccessToken();
+      return token != null && token.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error loading auth state: $e');
+      return false;
+    }
   }
 
   @override

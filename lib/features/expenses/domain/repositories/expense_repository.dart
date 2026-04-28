@@ -12,6 +12,7 @@ abstract class ExpenseRepository {
     String? category,
     int? year,
     int? month,
+    bool forceUpdate = false,
   });
   Future<List<Expense>> getExpensesByGroup(String groupId);
   Future<double> getCurrentMonthTotal();

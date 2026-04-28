@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/ai/ai_service.dart';
 import '../../../../core/network/dio_provider.dart';
 import '../../../../core/session/session_user.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -42,14 +43,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ref.invalidate(recentExpensesProvider);
     ref.invalidate(monthOverviewProvider);
     ref.invalidate(yearAnalyticsProvider);
-    await Future.wait([
-      ref.read(recentExpensesProvider.future),
-      ref.read(monthOverviewProvider(_selectedMonth).future),
-      ref.read(yearAnalyticsProvider(_selectedAnalyticsYear).future),
-    ]).timeout(
-      const Duration(seconds: 10),
-      onTimeout: () => [],
-    );
   }
 
   Future<SessionUser> _loadUser() async {
@@ -184,8 +177,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         onRetry: _refresh,
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    _SyncReadyCard(),
                     const SizedBox(height: 18),
                     _SectionHeader(
                       title: 'Analytics',
@@ -207,6 +198,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 18),
+                    _AiInsightsCard(),
+                    const SizedBox(height: 18),
                     _SectionHeader(
                       title: 'Recent transactions',
                       trailing: TextButton(
@@ -221,14 +214,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ...expenses.take(5).map(
                             (expense) => _TransactionCard(expense: expense),
                           ),
-                    if (expenses.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      OutlinedButton.icon(
-                        onPressed: widget.onSignOut,
-                        icon: const Icon(Icons.logout_rounded),
-                        label: const Text('Sign out'),
-                      ),
-                    ],
                   ],
                 );
               },
@@ -263,6 +248,342 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
+class _AiInsightsCard extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_AiInsightsCard> createState() => _AiInsightsCardState();
+}
+
+class _AiInsightsCardState extends ConsumerState<_AiInsightsCard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(allExpensesForAiProvider.notifier).init();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final aiState = ref.watch(allExpensesForAiProvider);
+    final palette = context.palette;
+    
+    if (aiState.isLoading && !aiState.hasData) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: context.appCardDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome, color: palette.primary, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'AI Spending Forecast',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+        ),
+      );
+    }
+    
+    if (!aiState.hasData) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: context.appCardDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome, color: palette.primary, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'AI Spending Forecast',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Add more expenses to get AI predictions',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return _AiPredictionsWidget(
+      predictions: aiState.predictions,
+      isRefreshing: aiState.isRefreshing,
+      onRefresh: () => ref.read(allExpensesForAiProvider.notifier).forceRefresh(),
+    );
+  }
+}
+
+class _AiPredictionsWidget extends StatelessWidget {
+  final List<SpendingPrediction> predictions;
+  final bool isRefreshing;
+  final VoidCallback onRefresh;
+  
+  const _AiPredictionsWidget({
+    required this.predictions,
+    required this.isRefreshing,
+    required this.onRefresh,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: context.appCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: palette.primary, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'AI Spending Forecast',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                'Next Month',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: palette.textMuted,
+                    ),
+              ),
+              IconButton(
+                icon: isRefreshing
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: palette.primary,
+                        ),
+                      )
+                    : Icon(
+                        Icons.refresh_rounded,
+                        size: 20,
+                        color: palette.textMuted,
+                      ),
+                onPressed: isRefreshing ? null : onRefresh,
+                tooltip: 'Refresh AI predictions',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildContent(context, predictions),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildContent(BuildContext context, List<SpendingPrediction> predictions) {
+    final palette = context.palette;
+    
+    if (predictions.isEmpty) {
+      return Text(
+        'Add more expenses to get AI predictions',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+    
+    final totalPredicted = predictions.fold<double>(0, (sum, p) => sum + p.predictedAmount);
+    final increasingCount = predictions.where((p) => p.trend == 'increasing').length;
+    final decreasingCount = predictions.where((p) => p.trend == 'decreasing').length;
+    
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: palette.surfaceSoft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: palette.border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _SummaryChip(
+                label: 'Total Est.',
+                value: NumberFormat.currency(symbol: 'MMK ', decimalDigits: 0)
+                    .format(totalPredicted),
+                color: palette.primary,
+              ),
+              _SummaryChip(
+                label: 'Increasing',
+                value: '$increasingCount',
+                color: Colors.orange,
+              ),
+              _SummaryChip(
+                label: 'Decreasing',
+                value: '$decreasingCount',
+                color: Colors.green,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        ...predictions.take(4).map((p) => _PredictionRow(prediction: p)),
+      ],
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  
+  const _SummaryChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PredictionRow extends StatelessWidget {
+  final SpendingPrediction prediction;
+  
+  const _PredictionRow({required this.prediction});
+  
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    
+    Color trendColor;
+    String trendLabel;
+    
+    switch (prediction.trend) {
+      case 'increasing':
+        trendColor = Colors.orange;
+        trendLabel = '↑ Rising';
+        break;
+      case 'decreasing':
+        trendColor = Colors.green;
+        trendLabel = '↓ Falling';
+        break;
+      default:
+        trendColor = Colors.grey;
+        trendLabel = '→ Stable';
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: palette.surfaceMuted,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _getCategoryIcon(prediction.category),
+              color: palette.primary,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  prediction.category,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                Text(
+                  trendLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: trendColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            NumberFormat.currency(symbol: 'MMK ', decimalDigits: 0)
+                .format(prediction.predictedAmount),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'food':
+      case 'groceries':
+        return Icons.restaurant_rounded;
+      case 'transport':
+      case 'travel':
+        return Icons.directions_car_rounded;
+      case 'shopping':
+        return Icons.shopping_bag_rounded;
+      case 'health':
+        return Icons.favorite_rounded;
+      case 'entertainment':
+        return Icons.movie_rounded;
+      case 'bills':
+        return Icons.receipt_long_rounded;
+      case 'education':
+        return Icons.school_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+}
+
 class _BalanceCard extends StatelessWidget {
   final ExpenseMonthSummary summary;
   final DateTime selectedMonth;
@@ -280,15 +601,22 @@ class _BalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final amount = NumberFormat.currency(symbol: 'MMK ', decimalDigits: 0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: const BorderRadius.all(Radius.circular(30)),
-        gradient: context.heroGradient,
+        gradient: LinearGradient(
+          colors: isDark
+              ? [palette.heroStart, palette.heroEnd]
+              : [palette.heroCardStart, palette.heroCardEnd],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         boxShadow: [
           BoxShadow(
-            color: palette.heroStart.withValues(alpha: 0.24),
+            color: palette.primary.withValues(alpha: 0.24),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
@@ -387,57 +715,6 @@ class _BalanceCardSkeleton extends StatelessWidget {
       selectedMonth: selectedMonth,
       availableMonths: availableMonths,
       onSelectedMonth: onSelectedMonth,
-    );
-  }
-}
-
-class _SyncReadyCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: context.appCardDecoration(
-        color: palette.surfaceSoft,
-        radius: 24,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: palette.surfaceMuted,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              Icons.sync_rounded,
-              color: palette.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Offline-ready flow',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Your latest expenses and groups can stay visible offline. New offline changes are prepared to sync when the app reconnects.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -711,19 +988,40 @@ class _MonthFilterChip extends StatelessWidget {
     required this.onSelected,
   });
 
+  Future<void> _showMonthPicker(BuildContext context) async {
+    final result = await showDatePicker(
+      context: context,
+      initialDate: selectedMonth,
+      firstDate: months.isNotEmpty ? months.last : DateTime(2020),
+      lastDate: months.isNotEmpty ? months.first : DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context),
+          child: child!,
+        );
+      },
+    );
+    
+    if (result != null) {
+      final selectedDate = DateTime(result.year, result.month);
+      if (!months.contains(selectedDate)) {
+        final closest = months.reduce((a, b) =>
+            (a.difference(selectedDate).abs() < b.difference(selectedDate).abs())
+                ? a
+                : b);
+        onSelected(closest);
+      } else {
+        onSelected(selectedDate);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<DateTime>(
-      initialValue: selectedMonth,
-      onSelected: onSelected,
-      itemBuilder: (context) => months
-          .map(
-            (month) => PopupMenuItem<DateTime>(
-              value: month,
-              child: Text(DateFormat('MMM yyyy').format(month)),
-            ),
-          )
-          .toList(),
+    return InkWell(
+      onTap: () => _showMonthPicker(context),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -742,7 +1040,7 @@ class _MonthFilterChip extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(Icons.expand_more_rounded, color: Colors.white, size: 16),
+            const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 14),
           ],
         ),
       ),
@@ -761,20 +1059,39 @@ class _YearFilterChip extends StatelessWidget {
     required this.onSelected,
   });
 
+  Future<void> _showYearPicker(BuildContext context) async {
+    final result = await showDatePicker(
+      context: context,
+      initialDate: DateTime(selectedYear, 1),
+      firstDate: years.isNotEmpty ? DateTime(years.last, 1) : DateTime(2020),
+      lastDate: years.isNotEmpty ? DateTime(years.first, 12, 31) : DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context),
+          child: child!,
+        );
+      },
+    );
+    
+    if (result != null) {
+      final selectedYear = result.year;
+      if (years.contains(selectedYear)) {
+        onSelected(selectedYear);
+      } else {
+        final closest = years.reduce((a, b) =>
+            ((a - selectedYear).abs() < (b - selectedYear).abs()) ? a : b);
+        onSelected(closest);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return PopupMenuButton<int>(
-      initialValue: selectedYear,
-      onSelected: onSelected,
-      itemBuilder: (context) => years
-          .map(
-            (year) => PopupMenuItem<int>(
-              value: year,
-              child: Text('$year'),
-            ),
-          )
-          .toList(),
+    return InkWell(
+      onTap: () => _showYearPicker(context),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -793,7 +1110,7 @@ class _YearFilterChip extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.expand_more_rounded, color: palette.accent, size: 16),
+            Icon(Icons.calendar_today_rounded, color: palette.accent, size: 14),
           ],
         ),
       ),

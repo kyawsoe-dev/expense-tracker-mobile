@@ -10,6 +10,10 @@ abstract class GroupRepository {
 
   Future<ExpenseGroup> addMember(String groupId, String email);
 
+  Future<ExpenseGroup> renameGroup(String groupId, String newName);
+
+  Future<ExpenseGroup> removeMember(String groupId, String memberId);
+
   Future<List<GroupMemberSuggestion>> searchMemberSuggestions(
     String query, {
     String? groupId,

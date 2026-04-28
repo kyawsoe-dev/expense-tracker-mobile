@@ -11,7 +11,7 @@ final groupRepositoryProvider = Provider<GroupRepository>((ref) {
 });
 
 final groupsProvider = FutureProvider<List<ExpenseGroup>>((ref) async {
-  final repo = ref.read(groupRepositoryProvider);
+  final repo = ref.watch(groupRepositoryProvider);
   return repo.getGroups();
 });
 
@@ -20,3 +20,43 @@ final groupDetailProvider =
   final repo = ref.read(groupRepositoryProvider);
   return repo.getGroupDetail(groupId);
 });
+
+final renameGroupProvider =
+    FutureProvider.family<ExpenseGroup, RenameGroupParams>(
+  (ref, params) async {
+    final repo = ref.read(groupRepositoryProvider);
+    final result = await repo.renameGroup(params.groupId, params.newName);
+    ref.invalidate(groupDetailProvider(params.groupId));
+    ref.invalidate(groupsProvider);
+    return result;
+  },
+);
+
+final removeMemberProvider =
+    FutureProvider.family<ExpenseGroup, RemoveMemberParams>(
+  (ref, params) async {
+    final repo = ref.read(groupRepositoryProvider);
+    final result =
+        await repo.removeMember(params.groupId, params.memberId);
+    ref.invalidate(groupDetailProvider(params.groupId));
+    ref.invalidate(groupsProvider);
+    return result;
+  },
+);
+
+class RenameGroupParams {
+  final String groupId;
+  final String newName;
+
+  const RenameGroupParams({required this.groupId, required this.newName});
+}
+
+class RemoveMemberParams {
+  final String groupId;
+  final String memberId;
+
+  const RemoveMemberParams({
+    required this.groupId,
+    required this.memberId,
+  });
+}

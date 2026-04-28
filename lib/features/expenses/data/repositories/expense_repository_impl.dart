@@ -14,6 +14,20 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
   static const _recentExpensesCacheKey = 'cache_expenses_recent';
   static const _monthSummaryCacheKey = 'cache_expenses_month_summary';
   static const _pendingActionsKey = 'queue_expense_actions';
+  static const _historyPageCacheKey = 'cache_expenses_history';
+
+  static String _historyCacheKey({
+    String? search,
+    String? category,
+    int? year,
+    int? month,
+  }) {
+    final searchPart = search?.trim().isNotEmpty == true ? '_s:$search' : '';
+    final catPart = category?.trim().isNotEmpty == true ? '_c:$category' : '';
+    final yearPart = year != null ? '_y:$year' : '';
+    final monthPart = month != null ? '_m:$month' : '';
+    return '$_historyPageCacheKey$searchPart$catPart$yearPart$monthPart';
+  }
 
   final Dio dio;
   final OfflineStore offlineStore;
@@ -26,8 +40,7 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
   Future<List<Expense>> getRecentExpenses() async {
     try {
       await _syncPendingActions();
-      final response =
-          await dio.get('/expenses', queryParameters: {'take': 20, 'skip': 0});
+      final response = await dio.get('/expenses');
       final expenses = _decodeExpensePage(response.data).items;
       await _writeExpensesCache(_recentExpensesCacheKey, expenses);
       return expenses;
@@ -87,6 +100,70 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
     String? category,
     int? year,
     int? month,
+    bool forceUpdate = false,
+  }) async {
+    final cacheKey = _historyCacheKey(
+      search: search,
+      category: category,
+      year: year,
+      month: month,
+    );
+
+    if (!forceUpdate && skip == 0) {
+      final cached = await _readHistoryPageCache(cacheKey);
+      if (cached != null) {
+        Future.microtask(() => _fetchAndCacheHistory(
+              cacheKey: cacheKey,
+              take: take,
+              skip: skip,
+              search: search,
+              category: category,
+              year: year,
+              month: month,
+            ));
+        return cached;
+      }
+    }
+
+    try {
+      await _syncPendingActions();
+      final response = await dio.get(
+        '/expenses',
+        queryParameters: {
+          'take': take,
+          'skip': skip,
+          if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+          if (category != null && category.trim().isNotEmpty)
+            'category': category.trim(),
+          if (year != null) 'year': year,
+          if (month != null) 'month': month,
+        },
+      );
+      final page = _decodeExpensePage(response.data);
+      if (skip == 0) {
+        await _writeHistoryPageCache(cacheKey, page);
+      }
+      return page;
+    } on DioException catch (error) {
+      if (!isOfflineError(error)) {
+        rethrow;
+      }
+      final cached = await _readHistoryPageCache(cacheKey);
+      if (cached != null) {
+        return cached;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _fetchAndCacheHistory({
+    required String cacheKey,
+    required int take,
+    required int skip,
+    String? search,
+    String? category,
+    int? year,
+    int? month,
   }) async {
     try {
       await _syncPendingActions();
@@ -102,31 +179,43 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
           if (month != null) 'month': month,
         },
       );
-      return _decodeExpensePage(response.data);
-    } on DioException catch (error) {
-      if (!isOfflineError(error)) {
-        rethrow;
-      }
-      final canUseRecentCache = skip == 0 &&
-          (search == null || search.trim().isEmpty) &&
-          (category == null || category.trim().isEmpty) &&
-          year == null &&
-          month == null;
-      if (canUseRecentCache) {
-        final cached = await _readExpensesCache(_recentExpensesCacheKey);
-        if (cached.isNotEmpty) {
-          return ExpenseHistoryPage(
-            items: cached.take(take).toList(),
-            total: cached.length,
-            take: take,
-            skip: 0,
-            hasMore: cached.length > take,
-            nextSkip: cached.length > take ? take : null,
-          );
-        }
-      }
-      rethrow;
+      final page = _decodeExpensePage(response.data);
+      await _writeHistoryPageCache(cacheKey, page);
+    } catch (_) {}
+  }
+
+  Future<ExpenseHistoryPage?> _readHistoryPageCache(String key) async {
+    final data = await offlineStore.readJsonMap(key);
+    if (data == null) {
+      return null;
     }
+    return _decodeHistoryPageCache(data);
+  }
+
+  Future<void> _writeHistoryPageCache(String key, ExpenseHistoryPage page) {
+    return offlineStore.writeJson(key, {
+      'items': page.items.map((e) => _toModel(e).toJson()).toList(),
+      'total': page.total,
+      'take': page.take,
+      'skip': page.skip,
+      'hasMore': page.hasMore,
+      'nextSkip': page.nextSkip,
+      'cachedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  ExpenseHistoryPage _decodeHistoryPageCache(Map<String, dynamic> json) {
+    final items = (json['items'] as List<dynamic>? ?? [])
+        .map((item) => ExpenseModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+    return ExpenseHistoryPage(
+      items: items,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      take: (json['take'] as num?)?.toInt() ?? 20,
+      skip: (json['skip'] as num?)?.toInt() ?? 0,
+      hasMore: json['hasMore'] as bool? ?? false,
+      nextSkip: (json['nextSkip'] as num?)?.toInt(),
+    );
   }
 
   @override

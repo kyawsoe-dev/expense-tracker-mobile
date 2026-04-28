@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../network/dio_provider.dart';
+import '../storage/token_storage.dart';
+
+final tokenStorageForThemeProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 final themeModeProvider = AsyncNotifierProvider<ThemeModeController, ThemeMode>(
   ThemeModeController.new,
@@ -9,14 +11,14 @@ final themeModeProvider = AsyncNotifierProvider<ThemeModeController, ThemeMode>(
 class ThemeModeController extends AsyncNotifier<ThemeMode> {
   @override
   Future<ThemeMode> build() async {
-    final storage = ref.read(tokenStorageProvider);
+    final storage = ref.read(tokenStorageForThemeProvider);
     final raw = await storage.readThemeMode();
     return _decode(raw);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
     state = AsyncData(mode);
-    final storage = ref.read(tokenStorageProvider);
+    final storage = ref.read(tokenStorageForThemeProvider);
     await storage.writeThemeMode(_encode(mode));
   }
 
