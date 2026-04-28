@@ -1,10 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../core/navigation/app_router.dart';
 import '../../../../core/network/dio_provider.dart';
 import '../../../../core/session/session_state.dart';
 import '../../../../core/theme/app_theme.dart';
+// Keycloak authentication service provider for social login integration
+// import '../../../../core/auth/keycloak_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -140,6 +143,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /*
+  // Handles Google OAuth login via Keycloak social identity provider
+  Future<void> _handleGoogleLogin() async {
+    await _handleKeycloakSocialLogin(
+      provider: 'google',
+      errorMessage: 'Google login failed. Please try again.',
+    );
+  }
+
+  // Handles GitHub OAuth login via Keycloak social identity provider
+  Future<void> _handleGitHubLogin() async {
+    await _handleKeycloakSocialLogin(
+      provider: 'github',
+      errorMessage: 'GitHub login failed. Please try again.',
+    );
+  }
+
+  // Generic handler for Keycloak social login (Google/GitHub)
+  // Authenticates via Keycloak service and saves tokens to local storage
+  Future<void> _handleKeycloakSocialLogin({
+    required String provider,
+    required String errorMessage,
+  }) async {
+    setState(() => _loading = true);
+    try {
+      final keycloakService = ref.read(keycloakServiceProvider);
+      final tokenStorage = ref.read(tokenStorageProvider);
+
+      final result = provider == 'google'
+          ? await keycloakService.authenticateWithGoogle()
+          : await keycloakService.authenticateWithGitHub();
+
+      if (result?.accessToken != null) {
+        await tokenStorage.clear();
+        await tokenStorage.writeTokens(
+          accessToken: result!.accessToken!,
+          refreshToken: result.refreshToken ?? '',
+        );
+        resetSignedInData(ref);
+
+        if (!mounted) return;
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil(AppRoutes.dashboard, (_) => false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessage)));
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+  */
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -272,21 +331,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     },
                                     onSubmit: _submitRegistration,
                                   )
-                                : _LoginForm(
+                                : Column(
                                     key: const ValueKey('login'),
-                                    formKey: _loginFormKey,
-                                    emailCtrl: _loginEmailCtrl,
-                                    passwordCtrl: _loginPasswordCtrl,
-                                    loading: _loading,
-                                    showPassword: _showLoginPassword,
-                                    onTogglePassword: () {
-                                      setState(() {
-                                        _showLoginPassword =
-                                            !_showLoginPassword;
-                                      });
-                                    },
-                                    onSubmit: _submitLogin,
-                                  ),
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _LoginForm(
+                                        formKey: _loginFormKey,
+                                        emailCtrl: _loginEmailCtrl,
+                                        passwordCtrl: _loginPasswordCtrl,
+                                        loading: _loading,
+                                        showPassword: _showLoginPassword,
+                                        onTogglePassword: () {
+                                          setState(() {
+                                            _showLoginPassword =
+                                                !_showLoginPassword;
+                                          });
+                                        },
+                                        onSubmit: _submitLogin,
+                                       ),
+                                       const SizedBox(height: 20),
+                                       /*
+                                       // Social login divider - separates form login from Keycloak social login
+                                       const _SocialLoginDivider(),
+                                       const SizedBox(height: 16),
+                                       // Keycloak Google social login button
+                                       _SocialLoginButton(
+                                         label: 'Continue with Google',
+                                         icon: FontAwesomeIcons.google,
+                                         onPressed: _loading
+                                             ? null
+                                             : _handleGoogleLogin,
+                                       ),
+                                       const SizedBox(height: 12),
+                                       // Keycloak GitHub social login button
+                                       _SocialLoginButton(
+                                         label: 'Continue with GitHub',
+                                         icon: FontAwesomeIcons.github,
+                                         onPressed: _loading
+                                             ? null
+                                             : _handleGitHubLogin,
+                                       ),
+                                        */
+                                       ],
+                                   ),
                           ),
                         ],
                       ),
@@ -355,7 +443,6 @@ class _LoginForm extends StatelessWidget {
   final Future<void> Function() onSubmit;
 
   const _LoginForm({
-    super.key,
     required this.formKey,
     required this.emailCtrl,
     required this.passwordCtrl,
@@ -489,7 +576,7 @@ class _RegisterForm extends StatelessWidget {
             controller: nameCtrl,
             decoration: const InputDecoration(
               labelText: 'Name',
-              hintText: 'Mg Mg',
+              hintText: 'Kyaw Soe',
               prefixIcon: Icon(Icons.person_outline_rounded),
             ),
             validator: (value) {
@@ -600,3 +687,65 @@ String? _passwordValidator(String? value) {
   }
   return null;
 }
+
+/*
+// Visual divider widget for separating social login options
+class _SocialLoginDivider extends StatelessWidget {
+  const _SocialLoginDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Row(
+      children: [
+        Expanded(child: Divider(color: palette.border)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Or continue with',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: palette.textSecondary,
+                ),
+          ),
+        ),
+        Expanded(child: Divider(color: palette.border)),
+      ],
+    );
+  }
+}
+
+class _SocialLoginButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  const _SocialLoginButton({
+    required this.label,
+    required this.icon,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 22),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        side: BorderSide(color: palette.border),
+        foregroundColor: palette.textPrimary,
+        textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+*/
