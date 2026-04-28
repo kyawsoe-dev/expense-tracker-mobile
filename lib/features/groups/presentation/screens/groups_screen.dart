@@ -25,78 +25,90 @@ class GroupsScreen extends ConsumerWidget {
         title: 'Groups',
         subtitle: 'Shared spaces for couples, family, and teams',
       ),
-      body: groupsAsync.when(
-        data: (groups) {
-          if (groups.isEmpty) {
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                _SupportCard(palette: palette),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    onPressed: () => _showCreateGroupDialog(context, ref),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('New'),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(groupsProvider.future),
+        child: groupsAsync.when(
+          data: (groups) {
+            if (groups.isEmpty) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  _SupportCard(palette: palette),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.icon(
+                      onPressed: () => _showCreateGroupDialog(context, ref),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('New'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: context.appCardDecoration(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: palette.accentSoft,
-                          borderRadius: BorderRadius.circular(18),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: context.appCardDecoration(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: palette.accentSoft,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Icon(
+                            Icons.groups_rounded,
+                            color: palette.accent,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.groups_rounded,
-                          color: palette.accent,
+                        const SizedBox(height: 14),
+                        Text(
+                          'No groups yet',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'No groups yet',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Create a group for shared expenses like home, travel, or couple budgets.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          'Create a group for shared expenses like home, travel, or couple budgets.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            );
-          }
+                ],
+              );
+            }
 
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-            itemBuilder: (context, index) => _GroupTile(group: groups[index]),
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemCount: groups.length,
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Padding(
+            return ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+              itemBuilder: (context, index) => _GroupTile(group: groups[index]),
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemCount: groups.length,
+            );
+          },
+          loading: () => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 100),
+              Center(child: CircularProgressIndicator()),
+            ],
+          ),
+          error: (error, _) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            child: Container(
-              padding: const EdgeInsets.all(18),
-              decoration: context.appCardDecoration(),
-              child: Text(
-                'Could not load groups: $error',
-                style: Theme.of(context).textTheme.bodyMedium,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: context.appCardDecoration(),
+                child: Text(
+                  'Could not load groups: $error',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

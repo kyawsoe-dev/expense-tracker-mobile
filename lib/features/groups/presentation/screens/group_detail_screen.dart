@@ -29,20 +29,20 @@ class GroupDetailScreen extends ConsumerWidget {
     final detailAsync = ref.watch(groupDetailProvider(group.id));
     final expensesAsync = ref.watch(groupExpensesProvider(group.id));
     final amount = NumberFormat.currency(symbol: 'MMK ', decimalDigits: 0);
-    final relation = describeGroupRelationship(group);
+    final currentGroup = detailAsync.asData?.value ?? group;
+    final relation = describeGroupRelationship(currentGroup);
     final currentUserAsync = ref.watch(currentUserProvider);
 
     // Compute isOwner for the app bar
-    final detailData = detailAsync.asData?.value;
     final userData = currentUserAsync.asData?.value;
-    final isOwner = (detailData != null && userData != null)
-        ? detailData.members.any((m) => m.email == userData.email && m.role == 'owner')
+    final isOwner = (userData != null)
+        ? currentGroup.members.any((m) => m.email == userData.email && m.role == 'owner')
         : false;
 
     return Scaffold(
       backgroundColor: palette.background,
       appBar: ModernAppBar(
-        title: group.name,
+        title: currentGroup.name,
         subtitle: '${relation.label} collaboration space',
         actions: [
           if (isOwner)
@@ -57,22 +57,23 @@ class GroupDetailScreen extends ConsumerWidget {
         data: (detail) => expensesAsync.when(
           data: (expenses) {
             final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+            final displayGroup = detail;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 _GroupHeroCard(
-                  group: detail,
+                  group: displayGroup,
                   total: total,
                   expenseCount: expenses.length,
                   amount: amount,
-                  relation: describeGroupRelationship(detail),
+                  relation: describeGroupRelationship(displayGroup),
                 ),
                 const SizedBox(height: 18),
                 _SectionCard(
                   title: 'Members',
                   subtitle:
-                      '${describeGroupRelationship(detail).summary} Invite people so they can add and view shared expenses together.',
+                      '${describeGroupRelationship(displayGroup).summary} Invite people so they can add and view shared expenses together.',
                   trailing: SizedBox(
                     height: 40,
                     child: FilledButton.tonalIcon(
@@ -84,13 +85,13 @@ class GroupDetailScreen extends ConsumerWidget {
                   ),
                   child: currentUserAsync.when(
                     data: (user) {
-                      final isOwner = detail.members.any(
+                      final isOwner = displayGroup.members.any(
                         (m) => m.email == user.email && m.role == 'owner',
                       );
                       return Wrap(
                         spacing: 10,
                         runSpacing: 10,
-                        children: detail.members.map(
+                        children: displayGroup.members.map(
                           (member) {
                             final isCurrentUserOwner = member.role == 'owner';
                             return Container(
@@ -182,7 +183,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     error: (_, __) => Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: detail.members
+                      children: displayGroup.members
                           .map(
                             (member) => Container(
                               padding: const EdgeInsets.symmetric(
@@ -251,13 +252,13 @@ class GroupDetailScreen extends ConsumerWidget {
                   title: 'Balances',
                   subtitle:
                       'Each expense is split equally between the current group members.',
-                  child: detail.balances.isEmpty
+                  child: displayGroup.balances.isEmpty
                       ? Text(
                           'No balances yet.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         )
                       : Column(
-                          children: detail.balances
+                          children: displayGroup.balances
                               .map(
                                 (balance) => _BalanceTile(
                                   balance: balance,
@@ -383,6 +384,8 @@ class GroupDetailScreen extends ConsumerWidget {
 
     try {
       await ref.read(groupRepositoryProvider).renameGroup(group.id, newName);
+      ref.invalidate(groupDetailProvider(group.id));
+      ref.invalidate(groupsProvider);
 
       if (!context.mounted) {
         return;
