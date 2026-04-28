@@ -22,6 +22,53 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   int _currentIndex = 0;
+  DateTime? _lastBackPress;
+
+  Future<bool> _onWillPop() async {
+    final now = DateTime.now();
+    if (_lastBackPress != null &&
+        now.difference(_lastBackPress!).inMilliseconds < 2000) {
+      return true;
+    }
+    _lastBackPress = now;
+
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final palette =
+            Theme.of(context).extension<AppPalette>() ?? AppPalette.light;
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Exit app?'),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                icon: Icon(Icons.close_rounded, color: palette.textMuted),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                iconSize: 22,
+              ),
+            ],
+          ),
+          content: const Text(
+            'Press again to exit the app.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Exit'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return shouldExit ?? false;
+  }
 
   void _setIndex(int index) {
     if (_currentIndex == index) {
@@ -135,8 +182,17 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
     ];
 
-    return Scaffold(
-      body: AnimatedSwitcher(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 360),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
@@ -214,7 +270,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

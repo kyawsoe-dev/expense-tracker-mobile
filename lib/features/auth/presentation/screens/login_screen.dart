@@ -1,13 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../core/navigation/app_router.dart';
 import '../../../../core/network/dio_provider.dart';
 import '../../../../core/session/session_state.dart';
 import '../../../../core/theme/app_theme.dart';
-// Keycloak authentication service provider for social login integration
-// import '../../../../core/auth/keycloak_provider.dart';
+import '../../../../core/auth/keycloak_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -143,61 +142,109 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  /*
-  // Handles Google OAuth login via Keycloak social identity provider
+  // Handles Google OAuth login via Firebase + backend social login
   Future<void> _handleGoogleLogin() async {
-    await _handleKeycloakSocialLogin(
-      provider: 'google',
-      errorMessage: 'Google login failed. Please try again.',
-    );
-  }
-
-  // Handles GitHub OAuth login via Keycloak social identity provider
-  Future<void> _handleGitHubLogin() async {
-    await _handleKeycloakSocialLogin(
-      provider: 'github',
-      errorMessage: 'GitHub login failed. Please try again.',
-    );
-  }
-
-  // Generic handler for Keycloak social login (Google/GitHub)
-  // Authenticates via Keycloak service and saves tokens to local storage
-  Future<void> _handleKeycloakSocialLogin({
-    required String provider,
-    required String errorMessage,
-  }) async {
     setState(() => _loading = true);
     try {
-      final keycloakService = ref.read(keycloakServiceProvider);
+      final socialAuthService = ref.read(firebaseAuthServiceProvider);
+      final dio = ref.read(dioProvider);
       final tokenStorage = ref.read(tokenStorageProvider);
 
-      final result = provider == 'google'
-          ? await keycloakService.authenticateWithGoogle()
-          : await keycloakService.authenticateWithGitHub();
+      final result = await socialAuthService.signInWithGoogle();
 
-      if (result?.accessToken != null) {
-        await tokenStorage.clear();
-        await tokenStorage.writeTokens(
-          accessToken: result!.accessToken!,
-          refreshToken: result.refreshToken ?? '',
-        );
-        resetSignedInData(ref);
+      if (result?.idToken == null) return;
 
-        if (!mounted) return;
-        Navigator.of(context)
-            .pushNamedAndRemoveUntil(AppRoutes.dashboard, (_) => false);
+      // Send Firebase ID token to backend for verification and JWT issuance
+      final response = await dio.post('/auth/social-login', data: {
+        'provider': 'google',
+        'token': result!.idToken,
+      });
+
+      final access = response.data['accessToken'] as String?;
+      final refresh = response.data['refreshToken'] as String?;
+      final user = response.data['user'] as Map<String, dynamic>?;
+
+      if (access == null || refresh == null) {
+        throw Exception('Missing token fields in backend response');
       }
+
+      await tokenStorage.clear();
+      await tokenStorage.writeTokens(
+        accessToken: access,
+        refreshToken: refresh,
+      );
+      await tokenStorage.writeUserProfile(
+        email: user?['email'] as String?,
+        name: user?['name'] as String?,
+      );
+      resetSignedInData(ref);
+
+      if (!mounted) return;
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.dashboard, (_) => false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(errorMessage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google login failed: ${e.toString()}')),
+      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);
       }
     }
   }
-  */
+
+  // Handles GitHub OAuth login via Firebase + backend social login
+  Future<void> _handleGitHubLogin() async {
+    setState(() => _loading = true);
+    try {
+      final socialAuthService = ref.read(firebaseAuthServiceProvider);
+      final dio = ref.read(dioProvider);
+      final tokenStorage = ref.read(tokenStorageProvider);
+
+      final result = await socialAuthService.signInWithGitHub();
+
+      if (result?.accessToken == null) return;
+
+      // Send GitHub access token to backend for verification and JWT issuance
+      final response = await dio.post('/auth/social-login', data: {
+        'provider': 'github',
+        'token': result!.accessToken,
+      });
+
+      final access = response.data['accessToken'] as String?;
+      final refresh = response.data['refreshToken'] as String?;
+      final user = response.data['user'] as Map<String, dynamic>?;
+
+      if (access == null || refresh == null) {
+        throw Exception('Missing token fields in backend response');
+      }
+
+      await tokenStorage.clear();
+      await tokenStorage.writeTokens(
+        accessToken: access,
+        refreshToken: refresh,
+      );
+      await tokenStorage.writeUserProfile(
+        email: user?['email'] as String?,
+        name: user?['name'] as String?,
+      );
+      resetSignedInData(ref);
+
+      if (!mounted) return;
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.dashboard, (_) => false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('GitHub login failed: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +398,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         onSubmit: _submitLogin,
                                        ),
                                        const SizedBox(height: 20),
-                                       /*
                                        // Social login divider - separates form login from Keycloak social login
                                        const _SocialLoginDivider(),
                                        const SizedBox(height: 16),
@@ -372,8 +418,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                              ? null
                                              : _handleGitHubLogin,
                                        ),
-                                        */
-                                       ],
+                                        ],
                                    ),
                           ),
                         ],
@@ -688,7 +733,6 @@ String? _passwordValidator(String? value) {
   return null;
 }
 
-/*
 // Visual divider widget for separating social login options
 class _SocialLoginDivider extends StatelessWidget {
   const _SocialLoginDivider();
@@ -748,4 +792,3 @@ class _SocialLoginButton extends StatelessWidget {
     );
   }
 }
-*/
