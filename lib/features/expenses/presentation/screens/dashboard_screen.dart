@@ -265,7 +265,6 @@ class _AiInsightsCardState extends ConsumerState<_AiInsightsCard> {
   @override
   Widget build(BuildContext context) {
     final aiState = ref.watch(allExpensesForAiProvider);
-    final palette = context.palette;
     
     if (aiState.isLoading && !aiState.hasData) {
       return Container(
@@ -276,8 +275,6 @@ class _AiInsightsCardState extends ConsumerState<_AiInsightsCard> {
           children: [
             Row(
               children: [
-                Icon(Icons.auto_awesome, color: palette.primary, size: 22),
-                const SizedBox(width: 8),
                 Text(
                   'AI Spending Forecast',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -302,8 +299,6 @@ class _AiInsightsCardState extends ConsumerState<_AiInsightsCard> {
           children: [
             Row(
               children: [
-                Icon(Icons.auto_awesome, color: palette.primary, size: 22),
-                const SizedBox(width: 8),
                 Text(
                   'AI Spending Forecast',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -353,8 +348,6 @@ class _AiPredictionsWidget extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome, color: palette.primary, size: 22),
-              const SizedBox(width: 8),
               Text(
                 'AI Spending Forecast',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(

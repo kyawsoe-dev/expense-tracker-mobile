@@ -131,7 +131,7 @@ class AiInsightsNotifier extends StateNotifier<AiInsightsState> {
 
   Future<void> fetchIfNeeded() async {
     if (state.isLoading || state.isRefreshing) return;
-    if (state.hasData && !state.isExpired) return;
+    if (state.hasData && !state.isExpired && state.hasPredictions) return;
 
     state = state.copyWith(isLoading: true, error: null);
 
@@ -147,8 +147,14 @@ class AiInsightsNotifier extends StateNotifier<AiInsightsState> {
 
       await _saveToCache(monthlyTotals, cachedAt);
 
+      // Generate predictions if we don't have them
+      final predictions = state.hasPredictions && !state.isExpired
+          ? state.predictions
+          : await _aiService.predictSpending(monthlyTotals);
+
       state = AiInsightsState(
         categoryTotals: monthlyTotals,
+        predictions: predictions,
         cachedAt: cachedAt,
       );
     } catch (e) {

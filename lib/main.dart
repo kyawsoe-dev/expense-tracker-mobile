@@ -29,10 +29,10 @@ class ExpenseApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: themeModeAsync.valueOrNull ?? ThemeMode.system,
       routes: {
+        '/': (_) => const _AuthGate(),
         AppRoutes.login: (_) => const LoginScreen(),
         AppRoutes.dashboard: (_) => const AppShell(),
       },
-      home: const _AuthGate(),
     );
   }
 }

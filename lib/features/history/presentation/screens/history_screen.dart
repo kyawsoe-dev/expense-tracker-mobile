@@ -291,15 +291,15 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
             Text(
               'Categories',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: categories.map((category) {
                 final selected = _selectedCategory == category;
                 return ChoiceChip(
@@ -308,7 +308,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                   labelStyle: TextStyle(
                     color: selected ? Colors.white : palette.textSecondary,
                     fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   onSelected: (_) {
                     setState(() => _selectedCategory = category);
                     _loadInitial();
@@ -316,12 +319,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
             _CategoryChartCard(
               expenses: _expenses,
               selectedCategory: _selectedCategory,
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             _SectionHeader(
               title: 'Recent records',
               trailing: Container(

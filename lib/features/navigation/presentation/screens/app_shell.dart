@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/navigation/app_router.dart';
 import '../../../../core/network/dio_provider.dart';
 import '../../../../core/session/session_user.dart';
 import '../../../../core/session/session_state.dart';
@@ -44,7 +44,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Exit app?'),
+              const Text('Are you sure?'),
               IconButton(
                 onPressed: () => Navigator.of(context).pop(false),
                 icon: Icon(Icons.close_rounded, color: palette.textMuted),
@@ -55,11 +55,11 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           ),
           content: const Text(
-            'Press again to exit the app.',
+            'Want to exit this app.',
           ),
           actions: [
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(context).pop(true), 
               child: const Text('Exit'),
             ),
           ],
@@ -67,6 +67,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       },
     );
 
+    if (shouldExit == true) {
+      await SystemNavigator.pop();
+    }
     return shouldExit ?? false;
   }
 
@@ -101,15 +104,15 @@ class _AppShellState extends ConsumerState<AppShell> {
       // Local signout still succeeds if the API call fails.
     } finally {
       await storage.clear();
-      resetSignedInData(ref);
     }
 
     if (!mounted) {
       return;
     }
 
-    Navigator.of(context)
-        .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+    resetSignedInData(ref);
+    await Navigator.of(context, rootNavigator: true)
+        .pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   Future<void> _confirmAndSignOut() async {
@@ -188,7 +191,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         if (didPop) return;
         final shouldPop = await _onWillPop();
         if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
+          await SystemNavigator.pop();
         }
       },
       child: Scaffold(

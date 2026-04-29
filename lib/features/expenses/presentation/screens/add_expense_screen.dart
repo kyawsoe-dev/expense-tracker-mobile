@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,13 +27,30 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _amountCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  late final TextEditingController _dateCtrl;
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
   String? _selectedGroupId;
   String? _aiSuggestion;
   bool _isFetchingSuggestion = false;
+  Timer? _debounceTimer;
 
   bool get _isEditMode => widget.initialExpense != null;
+
+  static final _localCategoryKeywords = {
+    'Food': ['lunch', 'dinner', 'breakfast', 'restaurant', 'cafe', 'coffee', 'pizza', 'burger', 'meal', 'snack', 'food', 'eat', 'dining', 'mcdonald', 'kfc', 'starbucks'],
+    'Transport': ['taxi', 'uber', 'grab', 'bus', 'train', 'fuel', 'gas', 'parking', 'toll', 'metro', 'subway', 'flight', 'plane', 'ticket', 'transport', 'travel'],
+    'Shopping': ['shopping', 'mall', 'amazon', 'clothes', 'shirt', 'shoes', 'dress', 'store', 'market', 'buy', 'purchase', 'retail'],
+    'Health': ['doctor', 'hospital', 'pharmacy', 'medicine', 'medical', 'health', 'clinic', 'dental', 'eye', 'glasses', 'vitamin'],
+    'Entertainment': ['movie', 'cinema', 'netflix', 'spotify', 'game', 'concert', 'music', 'theatre', 'fun', 'party', 'bar', 'club'],
+    'Bills': ['electricity', 'water', 'internet', 'phone', 'bill', 'rent', 'mortgage', 'insurance', 'subscription', 'netflix', 'spotify'],
+    'Education': ['book', 'course', 'tuition', 'school', 'university', 'college', 'study', 'exam', 'class', 'training', 'workshop'],
+    'Groceries': ['grocery', 'supermarket', 'vegetable', 'fruit', 'meat', 'fish', 'milk', 'bread', 'eggs', 'rice', 'market'],
+    'Travel': ['hotel', 'airbnb', 'vacation', 'holiday', 'tour', 'trip', 'flight', 'passport', 'visa', 'luggage'],
+  };
+
+  String _formatDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
@@ -46,6 +64,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _selectedDate = expense.date;
       _selectedGroupId = expense.groupId;
     }
+    _dateCtrl = TextEditingController(text: _formatDate(_selectedDate));
   }
 
   @override
@@ -54,6 +73,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _amountCtrl.dispose();
     _categoryCtrl.dispose();
     _noteCtrl.dispose();
+    _dateCtrl.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
@@ -65,7 +86,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       lastDate: DateTime.now().add(const Duration(days: 1)),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _dateCtrl.text = _formatDate(picked);
+      });
     }
   }
 
@@ -73,10 +97,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final title = _titleCtrl.text.trim();
     if (title.length < 3) return;
 
+    // Try local keyword matching first for instant results
+    final localSuggestion = _findLocalSuggestion(title);
+    if (localSuggestion != null && _categoryCtrl.text.trim().isEmpty) {
+      setState(() {
+        _aiSuggestion = localSuggestion;
+        _categoryCtrl.text = localSuggestion;
+      });
+      return;
+    }
+
     setState(() => _isFetchingSuggestion = true);
     try {
       final aiService = ref.read(aiServiceProvider);
-      final suggestion = await aiService.suggestCategory(title);
+      final suggestion = await aiService.suggestCategory(title, note: _noteCtrl.text.trim());
       debugPrint('AI suggestion: $suggestion');
       if (mounted && suggestion.isNotEmpty && suggestion != 'Other') {
         setState(() {
@@ -91,6 +125,43 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     } finally {
       if (mounted) setState(() => _isFetchingSuggestion = false);
     }
+  }
+
+  String? _findLocalSuggestion(String title) {
+    final lowerTitle = title.toLowerCase();
+    for (final entry in _localCategoryKeywords.entries) {
+      for (final keyword in entry.value) {
+        if (lowerTitle.contains(keyword)) {
+          return entry.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _onTitleChanged(String value) {
+    _debounceTimer?.cancel();
+    if (value.trim().length < 3) {
+      setState(() => _aiSuggestion = null);
+      return;
+    }
+
+    // Try local matching instantly
+    final localSuggestion = _findLocalSuggestion(value);
+    if (localSuggestion != null && _categoryCtrl.text.trim().isEmpty) {
+      setState(() {
+        _aiSuggestion = localSuggestion;
+        _categoryCtrl.text = localSuggestion;
+      });
+    }
+
+    // Debounce AI call (500ms delay)
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      if (_categoryCtrl.text.trim().isEmpty) {
+        _fetchAiSuggestion();
+      }
+    });
   }
 
   void _applySuggestion() {
@@ -156,8 +227,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final groupsAsync = ref.watch(groupsProvider);
-    final formattedDate =
-        '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -238,12 +307,40 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   children: [
                     TextFormField(
                       controller: _titleCtrl,
-                      decoration: const InputDecoration(
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      decoration: InputDecoration(
                         labelText: 'Title',
                         hintText: 'Lunch, taxi, groceries...',
-                        prefixIcon: Icon(Icons.title_rounded),
+                        prefixIcon: const Icon(Icons.title_rounded),
+                        suffixIcon: _aiSuggestion != null
+                            ? Tooltip(
+                                message: 'Category set to $_aiSuggestion',
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: palette.success,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _aiSuggestion!,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: palette.success,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
-                      onChanged: (value) {},
+                      onChanged: _onTitleChanged,
                       validator: (value) =>
                           (value == null || value.trim().isEmpty)
                               ? 'Enter a title'
@@ -252,6 +349,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _amountCtrl,
+                      style: Theme.of(context).textTheme.bodyLarge,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
@@ -273,6 +371,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _categoryCtrl,
+                      style: Theme.of(context).textTheme.bodyLarge,
                       decoration: InputDecoration(
                         labelText: 'Category',
                         hintText: 'Food, transport, shopping...',
@@ -310,19 +409,50 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     groupsAsync.when(
                       data: (groups) => DropdownButtonFormField<String?>(
                         initialValue: _selectedGroupId,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        selectedItemBuilder: (_) => [
+                          Text(
+                            'Personal expense',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(
+                                  color: palette.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                          ...groups.map(
+                            (group) => Text(
+                              group.name,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                          ),
+                        ],
                         decoration: const InputDecoration(
                           labelText: 'Group (optional)',
                           prefixIcon: Icon(Icons.group_work_rounded),
                         ),
                         items: [
-                          const DropdownMenuItem<String?>(
+                          DropdownMenuItem<String?>(
                             value: null,
-                            child: Text('Personal expense'),
+                            child: Text(
+                              'Personal expense',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    color: palette.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
                           ),
                           ...groups.map(
                             (group) => DropdownMenuItem<String?>(
                               value: group.id,
-                              child: Text(group.name),
+                              child: Text(
+                                group.name,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
                             ),
                           ),
                         ],
@@ -346,67 +476,27 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
+                    TextFormField(
+                      readOnly: true,
                       onTap: _pickDate,
-                      child: Ink(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: palette.surfaceSoft,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: palette.border),
+                      decoration: InputDecoration(
+                        labelText: 'Date',
+                        prefixIcon: Icon(
+                          Icons.calendar_month_rounded,
+                          color: palette.primary,
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: palette.surfaceMuted,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Icon(
-                                Icons.calendar_month_rounded,
-                                color: palette.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Date',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    formattedDate,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          color: palette.textPrimary,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: palette.textMuted,
-                            ),
-                          ],
+                        suffixIcon: Icon(
+                          Icons.chevron_right_rounded,
+                          color: palette.textMuted,
                         ),
                       ),
+                      controller: _dateCtrl,
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _noteCtrl,
+                      style: Theme.of(context).textTheme.bodyLarge,
                       decoration: const InputDecoration(
                         labelText: 'Note (optional)',
                         hintText: 'Add context for this expense',

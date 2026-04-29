@@ -418,25 +418,38 @@ class GroupDetailScreen extends ConsumerWidget {
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Remove member'),
-        content: Text(
-          'Are you sure you want to remove ${member.name} from the group?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+      builder: (context) {
+        final palette = context.palette;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Remove member'),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                icon: Icon(Icons.close_rounded, color: palette.textMuted),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                iconSize: 22,
+              ),
+            ],
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+          content: Text(
+            'Are you sure you want to remove ${member.name} from the group?',
+          ),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Remove'),
             ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true) {
@@ -445,6 +458,8 @@ class GroupDetailScreen extends ConsumerWidget {
 
     try {
       await ref.read(groupRepositoryProvider).removeMember(group.id, member.id);
+      ref.invalidate(groupDetailProvider(group.id));
+      ref.invalidate(groupsProvider);
 
       if (!context.mounted) {
         return;
