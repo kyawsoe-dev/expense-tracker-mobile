@@ -74,9 +74,6 @@ Android production release is prepared in this repo.
 
 - **Download APK**: [Latest Release APK](https://drive.google.com/file/d/1_6inV7Pdhly98LOWADIwIDb791yASAm5/view?usp=sharing)
 - Release guide: [RELEASE.md](https://github.com/kyawsoe-dev/expense-tracker-mobile/blob/main/RELEASE.md)
-- Release signing config: `mobile/android/key.properties`
-- Recommended build:
-- Smallest Play Store upload:
 
 ```bash
 cd mobile
