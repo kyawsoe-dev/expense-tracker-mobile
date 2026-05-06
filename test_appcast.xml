@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Expense Tracker Appcast</title>
+    <item>
+      <title>Version 9.9.9</title>
+      <description>Test force update for local emulator validation.</description>
+      <pubDate>Wed, 06 May 2026 00:00:00 +0000</pubDate>
+      <enclosure
+        url="https://play.google.com/store/apps/details?id=com.kyawsoe.expensetracker"
+        sparkle:version="9.9.9"
+        sparkle:os="android" />
+    </item>
+  </channel>
+</rss>

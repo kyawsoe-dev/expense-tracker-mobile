@@ -1,8 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:upgrader/upgrader.dart';
 import 'core/navigation/app_router.dart';
 import 'core/storage/token_storage.dart';
+import 'core/update/app_upgrader.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
@@ -14,11 +17,26 @@ Future<void> main() async {
   runApp(const ProviderScope(child: ExpenseApp()));
 }
 
-class ExpenseApp extends ConsumerWidget {
+class ExpenseApp extends ConsumerStatefulWidget {
   const ExpenseApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ExpenseApp> createState() => _ExpenseAppState();
+}
+
+class _ExpenseAppState extends ConsumerState<ExpenseApp> {
+  late final Upgrader _upgrader;
+  late final bool _forceUpdate;
+
+  @override
+  void initState() {
+    super.initState();
+    _upgrader = createAppUpgrader();
+    _forceUpdate = hasForcedUpgradeVersion();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeModeAsync = ref.watch(themeModeProvider);
 
     return MaterialApp(
@@ -28,6 +46,24 @@ class ExpenseApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeModeAsync.valueOrNull ?? ThemeMode.system,
+      builder: (context, child) {
+        return UpgradeAlert(
+          upgrader: _upgrader,
+          navigatorKey: appNavigatorKey,
+          barrierDismissible: false,
+          showIgnore: !_forceUpdate,
+          showLater: !_forceUpdate,
+          shouldPopScope: () => false,
+          onUpdate: () {
+            if (!kReleaseMode) {
+              debugPrint('Upgrader update tapped in debug mode.');
+              return false;
+            }
+            return true;
+          },
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       routes: {
         '/': (_) => const _AuthGate(),
         AppRoutes.login: (_) => const LoginScreen(),

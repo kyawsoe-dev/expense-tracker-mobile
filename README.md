@@ -61,6 +61,26 @@ flutter pub get
 flutter run
 ```
 
+## Force Update Testing
+
+To test the `upgrader` force-update popup locally on Android, first start the emulator, then run:
+
+```bash
+flutter run -d emulator-5554 --dart-define=UPGRADER_APPCAST_URL=http://10.0.2.2:8000/test_appcast.xml
+```
+
+Notes:
+
+- `emulator-5554` is the connected Android emulator device id.
+- You can check the active device id with:
+
+```bash
+flutter devices
+```
+
+- If your emulator id is different, replace `emulator-5554` with the id shown by `flutter devices`.
+- `10.0.2.2` is the special Android emulator address for reaching your Mac's localhost.
+
 ## Common Commands
 
 - `flutter pub get`: install packages

@@ -123,3 +123,24 @@ Example:
 ```yaml
 version: 1.0.1+2
 ```
+
+## 8. Update prompt testing
+
+The app now uses the `upgrader` package to show a store update prompt.
+
+Local testing options:
+
+```bash
+cd mobile
+flutter run \
+  --dart-define=UPGRADER_MIN_APP_VERSION=9.9.9
+```
+
+- Use a version higher than your installed app to force the mandatory update flow.
+- In debug builds, the prompt is also forced to appear so you can inspect the UI before the Play Store release exists.
+- If you want to test a real version feed locally, provide `--dart-define=UPGRADER_APPCAST_URL=<your-appcast-url>`.
+
+Production releases:
+
+- Set `UPGRADER_MIN_APP_VERSION` to the oldest supported version when building a release.
+- Example: if you want to force users below `1.0.1` to update, build with `--dart-define=UPGRADER_MIN_APP_VERSION=1.0.1`.
